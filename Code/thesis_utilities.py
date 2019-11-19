@@ -154,13 +154,13 @@ def get_class_dicts(img_dir):
 #Registration of the dataset
 
 
-def register_dataset(dataset_name):
+def register_dataset(dataset_name,dataset_path):
 
     for d in ["train", "val"]:
-        DatasetCatalog.register(dataset_name+ "_" + d, lambda d=d: get_class_dicts(dataset_name+"/" + d))
+        DatasetCatalog.register(dataset_name+ "_" + d, lambda d=d: get_class_dicts(dataset_path+"/" + d))
         MetadataCatalog.get(dataset_name+ "_" + d).set(thing_classes=[dataset_name])
 
-    return  MetadataCatalog.get("dataset_name_train")
+    return  MetadataCatalog.get(dataset_name +"_train")
 
     # picture_metadata = MetadataCatalog.get("picture_train")
 
