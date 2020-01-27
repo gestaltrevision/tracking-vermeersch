@@ -6,6 +6,7 @@ import shutil
 from general_utilities import cd,insert_string,get_filename
 
 
+
 def get_samples(video_file,frames_folder,nsamples=30):
     count=0
     cap=cv2.VideoCapture(video_file)
@@ -15,22 +16,20 @@ def get_samples(video_file,frames_folder,nsamples=30):
     success,frame=cap.read()
     video_name=get_filename(video_file)
     ext=".jpg"
-    while (success and (len(samples_id)>0)):
+    while success and (len(samples_id) > 0):
+        success,frame=cap.read()
+        count+=1
         if(count in samples_id):
             #get frame
             frame_file=insert_string(video_name,count,ext)
             frame_path=os.path.join(frames_folder,frame_file)
-            cv2.imwrite(frame_path,frame)
-            success,frame=cap.read()
+            cv2.imwrite(frame_path,frame)  
             print("Frame{0} saved successfully".format(count))
             #remove id=count from samples_id
             samples_id.remove(count)
             
-        #Udpdate counter
-        count+=1
-             
+    print("Succesfully saved frames")
     cap.release()
-
 # #Update Table
 def update_annotations(buffer_dir,table_path,dest_dir):
     sub_df=create_subtable(buffer_dir)
@@ -51,6 +50,7 @@ def create_subtable(buffer_dir):
     annotations_dict["class"]=[picture_id for el in range(len(frames_id))]
     sub_df=pd.DataFrame(annotations_dict)
     return sub_df
+
 def move_buffer(source_dir,dest_dir):
     """Move all frames from buffer folder to annotated frames folder"""
     for file in os.listdir(source_dir):
