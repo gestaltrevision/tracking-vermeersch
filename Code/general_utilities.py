@@ -51,4 +51,21 @@ def move_files(filenames, src_folder, dest_folder):
         copyfile(src_path, dest_path)
     print("Process Finished with exit")
 
+def get_frames(video_file,frames_folder):
+    count=0
+    cap=cv2.VideoCapture(video_file)
+    success,frame=cap.read()
+    video_name=get_filename(video_file)
+    ext=".jpg"
+    while success:
+        frame_file=insert_string(video_name,count,ext)
+        frame_path=os.path.join(frames_folder,frame_file)
+        cv2.imwrite(frame_path,frame)
+        success,frame=cap.read()
+        count+=1
+        print("Frame{0} saved successfully".format(count))
+    cap.release()
+
+
+
 
