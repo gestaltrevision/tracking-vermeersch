@@ -33,13 +33,7 @@ def get_samples(video_file,frames_folder,nsamples=30):
 
 # #Update Table
 def update_annotations(buffer_dir,table_path,dest_dir):
-    #Create new subtable
-    frames_id=os.listdir(buffer_dir)
-    picture_id=frames_id[0].split("_")[1]
-    annotations_dict={}
-    annotations_dict["frame_id"]=frames_id
-    annotations_dict["class"]=[picture_id for el in range(len(frames_id))]
-    sub_df=pd.DataFrame(annotations_dict)
+    sub_df=create_subtable(buffer_dir)
     #open previous table
     prev_df=pd.read_pickle(table_path)
     #update
@@ -48,7 +42,15 @@ def update_annotations(buffer_dir,table_path,dest_dir):
     pd.to_pickle(updated_df,table_path)
     #move pictures from buffer to annotated frames folder
     move_buffer(buffer_dir,dest_dir)
-
+    
+def create_subtable(buffer_dir):
+    frames_id=os.listdir(buffer_dir)
+    picture_id=frames_id[0].split("_")[1]
+    annotations_dict={}
+    annotations_dict["frame_id"]=frames_id
+    annotations_dict["class"]=[picture_id for el in range(len(frames_id))]
+    sub_df=pd.DataFrame(annotations_dict)
+    return sub_df
 def move_buffer(source_dir,dest_dir):
     """Move all frames from buffer folder to annotated frames folder"""
     for file in os.listdir(source_dir):
