@@ -32,6 +32,25 @@ def get_samples(video_file,frames_folder,nsamples=30):
     print("Succesfully saved frames")
     cap.release()
 
+def video_to_sl(video_path,video_name, frames_folder,skip=3): 
+
+    cap = cv2.VideoCapture(video_path)
+    success, frame = cap.read() ; assert success == True, "Unable to open the video"  
+    frame_count = 0
+    if(not(os.path.isdir(frames_folder))):# Create dir for frames if it doesn´t exist
+        os.mkdir(frames_folder)
+
+    while success:
+            frame_file = "{0}fr{1}.jpg".format(video_name,frame_count)
+            if(frame_count%skip==0): #Only save one frame per skip frames
+                frame_path = os.path.join(frames_folder, frame_file)
+                cv2.imwrite(frame_path, frame)
+                print("{0} saved successfully".format(frame_file))
+            success, frame = cap.read()
+            frame_count += 1
+            
+    cap.release()
+
 # dataset_path=os.path.join(main_dir,"Classification_Frames_Dataset")
 def split_dataset(dataset_path):
     picture_labels=[picture for picture in os.listdir(dataset_path) if "Y" in picture]
