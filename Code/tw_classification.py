@@ -80,20 +80,22 @@ def images_to_predictions(net,images,threshold,device):
 
 
 
-def video_to_sl(video_path,video_name, frames_folder,skip=3): 
+# def get_clips_times(df,art_class):
+#     class_list=df["class"].values.tolist()
+#     time_list=df["time"].values.tolist()
+#     try:
+#         first_index=next(i for i,art in enumerate(class_list) if art == art_class)
+#         last_index=next(i for i,art in enumerate(reversed(class_list)) if art == art_class)
 
-    cap = cv2.VideoCapture(video_path)
-    success, frame = cap.read() ; assert success == True, "Unable to open the video"  
-    frame_count = 0
-    while success:
-            frame_file = "{0}fr{1}.jpg".format(video_name,frame_count)
-            frame_path = os.path.join(video_path, frame_file)
-            if(frame_count%skip==0): #Only save one frame per skip frames
-                cv2.imwrite(frame_path, frame)
-                print("{0} saved successfully".format(frame_file))
-            success, frame = cap.read()
-            frame_count += 1
-            
-    cap.release()
+#     except StopIteration:
+#         return np.nan,np.nan
+    
+#     first_time=time_list[first_index]
+#     last_time=(time_list[last_index*-1] if not(last_index==0) else time_list[-1-last_index])
+#     return first_time,last_time
 
 
+
+def time_to_seconds(strftime):
+    minutes,seconds=strftime.split(":")
+    return float(minutes)*60 + float(seconds)
