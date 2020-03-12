@@ -56,7 +56,6 @@ def preprocess_accdata(df):
     acc_df=acc_df.reset_index(drop=True)
 
     iter_cols=acc_df.columns.drop("time")
-
     for col in iter_cols:
         acc_df[col]=acc_df.apply(lambda row :comma_to_float(row[col]), axis = 1)
     
@@ -120,56 +119,7 @@ def detect_peaks(x, mph=None, mpd=1, threshold=0, edge='rising',
 
     The function can handle NaN's
 
-    See this IPython Notebook [1]_.
-
-    References
-    ----------
-    .. [1] http://nbviewer.ipython.org/github/demotu/BMC/blob/master/notebooks/DetectPeaks.ipynb
-
-    Examples
-    --------
-    >>> from detect_peaks import detect_peaks
-    >>> x = np.random.randn(100)
-    >>> x[60:81] = np.nan
-    >>> # detect all peaks and plot data
-    >>> ind = detect_peaks(x, show=True)
-    >>> print(ind)
-
-    >>> x = np.sin(2*np.pi*5*np.linspace(0, 1, 200)) + np.random.randn(200)/5
-    >>> # set minimum peak height = 0 and minimum peak distance = 20
-    >>> detect_peaks(x, mph=0, mpd=20, show=True)
-
-    >>> x = [0, 1, 0, 2, 0, 3, 0, 2, 0, 1, 0]
-    >>> # set minimum peak distance = 2
-    >>> detect_peaks(x, mpd=2, show=True)
-
-    >>> x = np.sin(2*np.pi*5*np.linspace(0, 1, 200)) + np.random.randn(200)/5
-    >>> # detection of valleys instead of peaks
-    >>> detect_peaks(x, mph=-1.2, mpd=20, valley=True, show=True)
-
-    >>> x = [0, 1, 1, 0, 1, 1, 0]
-    >>> # detect both edges
-    >>> detect_peaks(x, edge='both', show=True)
-
-    >>> x = [-2, 1, -2, 2, 1, 1, 3, 0]
-    >>> # set threshold = 2
-    >>> detect_peaks(x, threshold = 2, show=True)
-
-    >>> x = [-2, 1, -2, 2, 1, 1, 3, 0]
-    >>> fig, axs = plt.subplots(ncols=2, nrows=1, figsize=(10, 4))
-    >>> detect_peaks(x, show=True, ax=axs[0], threshold=0.5, title=False)
-    >>> detect_peaks(x, show=True, ax=axs[1], threshold=1.5, title=False)
-
-    Version history
-    ---------------
-    '1.0.6':
-        Fix issue of when specifying ax object only the first plot was shown
-        Add parameter to choose if a title is shown and input a title
-    '1.0.5':
-        The sign of `mph` is inverted if parameter `valley` is True
-
     """
-
     x = np.atleast_1d(x).astype('float64')
     if x.size < 3:
         return np.array([], dtype=int)
@@ -362,8 +312,6 @@ def get_participant(file_path,common_str):
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
-
-
 def get_scaler(df,cols):
     #Normalization
     x = df[cols].values
@@ -371,39 +319,3 @@ def get_scaler(df,cols):
     return scaler
 
 
-def get_metadata(query_idx,data):
-    start_time=data.loc[query_idx]["start time"].values
-    participant=data.loc[query_idx]["participant"].values
-    return start_time,participant
-
-from moviepy.video.io.ffmpeg_tools import ffmpeg_extract_subclip,ffmpeg_resize
-
-def get_unlabeled_clip(start_time,participant,query_idx,main_dir,window_duration=2):
-    labeling_folder=os.path.join(main_dir,"AnnotatedData","Accelerometer_Data","labeling_folder")
-    data_dir=os.path.join(main_dir,"Data")
-  
-
-    clip_path=os.path.join(labeling_folder,"clip{0}_{1}.mp4".format(participant,query_idx))
-    
-    participant_folder=find_participant(participant,main_dir)
-    video_path=os.path.join(data_dir,participant_folder,"segments","1","fullstream_resized.mp4")
-    assert os.path.isfile(video_path),"Resized version does not exit yet"
-
-    ffmpeg_extract_subclip(video_path,start_time,start_time+window_duration, targetname=clip_path)
-
-    return clip_path
-    
-
-
-##Active learning
-
-from IPython.display import Video,clear_output,display
-
-def oracle_annotations(video_clip):
-    
-    clear_output(wait=True)
-    display(Video(video_clip,embed=True))
-    print("Type class of video...")
-    y_new = np.array([int(input())], dtype=int)
-    
-    return y_new

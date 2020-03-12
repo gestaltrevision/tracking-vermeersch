@@ -69,3 +69,15 @@ def get_frames(video_file,frames_folder):
 
 
 
+def get_subject(json_file):
+    with open(json_file) as f:
+        participant_info = json.load(f)
+    return participant_info["pa_info"]["Name"]
+    
+def find_participant(participant_target,main_dir):
+    data_path=os.path.join(main_dir,"Data")
+    participant_folders=[os.path.join(data_path,folder) for folder in os.listdir(data_path) if folder!=".vscode"]
+    
+    return next(participant_path for participant_path in participant_folders
+        if get_subject(os.path.join(participant_path,"participant.json"))==participant_target)
+
