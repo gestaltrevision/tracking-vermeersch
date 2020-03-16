@@ -29,37 +29,67 @@ def comma_to_float(str_number):
     else:
         return str_number
 
-def fix_frequency(times,fq_desired=10):  
-    offset=0
-    for i in range(1,len(times)):
-        dif=(times[i]-(times[i-1]-offset))
-        if(dif!=fq_desired):
-            offset+=fq_desired-dif
-        times[i]+=offset
-    return times
+# 
 
-def process_subtable(df):
-    df=df.dropna()
-    time_offset=min(df["Recording timestamp"])
-    df["Recording timestamp"]=df.apply(lambda row: row["Recording timestamp"]-time_offset,axis=1)
-    df["Recording timestamp"]=fix_frequency(np.asarray(df["Recording timestamp"]))
+from math import ceil,floor
+def preprocess_accdata(df,window_duration=2,sample_rate=10):
+    """input:
+            window_duration(secs)
+            sample_rate(msecs)"""
+
+    df=df[["Participant name","Accelerometer X","Accelerometer Y","Accelerometer Z"]]
+    df=df.rename(columns={"Participant name":"participant","Accelerometer X":"AccX",
+                                    "Accelerometer Y":"AccY","Accelerometer Z":"AccZ"})
+
+    df=df.dropna().drop_duplicates().reset_index(drop=True)
+
+    n_samples=int((window_duration*1000)/sample_rate)
+    participant=df.loc[0,"participant"]
+    #Create array with id's for feature extraction(each window has its own id)
+    id_arr=["{0}_{1}".format(participant,idx) for idx in range(floor(len(df)/n_samples)) for _ in range(n_samples)]
+    id_series=pd.Series(id_arr,name="id")
+    df=pd.concat((df,id_series),axis=1).dropna()
+    df["time"]=[sample_rate*count for count in range(len(df))]
+
+    iter_cols=["AccX","AccY","AccZ"]
+    for col in iter_cols:
+        df[col]=df.apply(lambda row :comma_to_float(row[col]), axis = 1)
+
     return df
 
-def preprocess_accdata(df):
+
+
+
+from math import sqrt
+def energy_to_rms(abs_energy,n):
+    return sqrt((1/n)*abs_energy)
+
+from tsfresh.feature_extraction import extract_features, MinimalFCParameters
+from tsfresh.utilities.dataframe_functions import impute
+
+
+def create_df_participant(df,fc_parameters,window_duration=2,sample_rate=10):
+    n_samples=(window_duration*1000)/sample_rate
+    extracted_features = extract_features(df, column_id="id",
+                                            default_fc_parameters=fc_parameters,
+                                            column_sort="time",
+                                            column_kind=None, column_value=None)
     
-    acc_df=df[["Recording timestamp","Accelerometer X","Accelerometer Y","Accelerometer Z"]]
-    acc_df=process_subtable(acc_df)
-
-    acc_df=acc_df.rename(columns={"Recording timestamp":"time","Accelerometer X":"AccX",
-                                       "Accelerometer Y":"AccY","Accelerometer Z":"AccZ"})
-
-    acc_df=acc_df.reset_index(drop=True)
-
-    iter_cols=acc_df.columns.drop("time")
-    for col in iter_cols:
-        acc_df[col]=acc_df.apply(lambda row :comma_to_float(row[col]), axis = 1)
+    if("abs_energy" in fc_parameters.keys()):
+        energy_cols=[col for col in extracted_features.columns if "energy" in col]
+        for col in energy_cols:
+            extracted_features[col]=extracted_features.apply(lambda row: energy_to_rms(row[col],n_samples),axis=1)
+        
+        new_cols={col:"rms_{0}".format( col.split("abs_energy")[0]) for col in energy_cols}
+        extracted_features=extracted_features.rename(columns=new_cols)
+    # extracted_features["id_info"]=df["id"].unique()
+    # extracted_features["start time"]=[ index*window_duration for index in range(len(extracted_features))]
     
-    return acc_df
+    return extracted_features
+
+
+
+ 
 
 
 #Feature Extraction functions
@@ -256,47 +286,49 @@ def get_features(x_values, y_values, mph):
 # t_n = 2; N = 200 ; T = t_n / N;  f_s = 1/T ; denominator = 10
 
 
-def extract_window_features(subset, T, N, f_s, denominator):
-    percentile = 5
-    features = []
-    for signal_comp in subset.columns:
-        signal = np.asarray(subset[signal_comp],dtype=np.float32)
-        signal_min = np.nanpercentile(signal, percentile)
-        signal_max = np.nanpercentile(signal, 100-percentile)
-        #ijk = (100 - 2*percentile)/10
-        #The value for minimum peak height is denominator of the maximum value of the signal. 
-        mph = signal_min + (signal_max - signal_min)/denominator
+# def extract_window_features(subset, T, N, f_s, denominator):
+#     percentile = 5
+#     features = []
+#     for signal_comp in subset.columns:
+#         signal = np.asarray(subset[signal_comp],dtype=np.float32)
+#         signal_min = np.nanpercentile(signal, percentile)
+#         signal_max = np.nanpercentile(signal, 100-percentile)
+#         #ijk = (100 - 2*percentile)/10
+#         #The value for minimum peak height is denominator of the maximum value of the signal. 
+#         mph = signal_min + (signal_max - signal_min)/denominator
   
-        features += get_features(*get_psd_values(signal, T, N, f_s), mph)
-        features += get_features(*get_fft_values(signal, T, N, f_s), mph)
-        features += get_features(*get_autocorr_values(signal, T, N, f_s), mph)
+#         features += get_features(*get_psd_values(signal, T, N, f_s), mph)
+#         features += get_features(*get_fft_values(signal, T, N, f_s), mph)
+#         features += get_features(*get_autocorr_values(signal, T, N, f_s), mph)
         
-    return np.array(features)
+#     return np.array(features)
 
-from math import ceil
-from tqdm import tqdm
-def create_df_participant(df,participant,window_duration,starts):
-    table={}
-    t_n = 2; N = 200 ; T = t_n / N;  f_s = 1/T ; denominator = 10
-    part_arr=[];start_arr=[];feat_arr=[]
-    #We can paralelize this
-    for start in starts:
-        for index in tqdm(range(ceil(len(df)/(window_duration*N)))):
-            start_time=start + (index*window_duration)
-            subset=df.loc[start_time/T:(start_time/T)+N]
-            part_arr.append(participant)
-            start_arr.append(start_time)
-            feat_arr.append(np.asarray(extract_window_features(subset,T,N,f_s,denominator),dtype=np.float32))
+# from math import ceil
+# from tqdm import tqdm
+# def create_df_participant(df,participant,window_duration,starts):
+#     table={}
+#     t_n = 2; N = 200 ; T = t_n / N;  f_s = 1/T ; denominator = 10
+
+#     part_arr=[];start_arr=[];feat_arr=[]
+#     #We can paralelize this
+#     for start in starts:
+#         for index in tqdm(range(ceil(len(df)/(window_duration*N)))):
+#             start_time=start + (index*window_duration)
+#             df=df.set_index("time")
+#             subset=df.loc[start_time*T:(start_time/T)+N] #!!!!!!!!!!
+#             part_arr.append(participant)
+#             start_arr.append(start_time)
+#             feat_arr.append(np.asarray(extract_window_features(subset,T,N,f_s,denominator),dtype=np.float32))
             
-        table["participant"]=part_arr
-        table["start time"]=start_arr
+#         table["participant"]=part_arr
+#         table["start time"]=start_arr
         
-#         table["features"]=np.stack(feat_arr,axis=0)
+# #         table["features"]=np.stack(feat_arr,axis=0)
 
-        feat_cols = [ 'feat'+str(i) for i in range(feat_arr[1].shape[0]) ]
-        feat_df = pd.DataFrame(np.stack(feat_arr,axis=0),columns=feat_cols)
+#         feat_cols = [ 'feat'+str(i) for i in range(feat_arr[1].shape[0]) ]
+#         feat_df = pd.DataFrame(np.stack(feat_arr,axis=0),columns=feat_cols)
 
-    return pd.concat([pd.DataFrame(table),feat_df],axis=1)
+#     return pd.concat([pd.DataFrame(table),feat_df],axis=1)
     
     
 
@@ -322,3 +354,20 @@ def get_scaler(df,cols):
 
 
 
+
+
+# def fix_frequency(times,fq_desired=10):  
+#     offset=0
+#     for i in range(1,len(times)):
+#         dif=(times[i]-(times[i-1]-offset))
+#         if(dif!=fq_desired):
+#             offset+=fq_desired-dif
+#         times[i]+=offset
+#     return times
+
+# def process_subtable(df):
+#     df=df.dropna()
+#     time_offset=min(df["Recording timestamp"])
+#     df["Recording timestamp"]=df.apply(lambda row: row["Recording timestamp"]-time_offset,axis=1)
+#     df["Recording timestamp"]=fix_frequency(np.asarray(df["Recording timestamp"]))
+#     return df

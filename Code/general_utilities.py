@@ -1,5 +1,5 @@
 import glob
-import itertools
+import itertools 
 import json
 import ntpath
 import os
@@ -75,9 +75,26 @@ def get_subject(json_file):
     return participant_info["pa_info"]["Name"]
     
 def find_participant(participant_target,main_dir):
+    
     data_path=os.path.join(main_dir,"Data")
     participant_folders=[os.path.join(data_path,folder) for folder in os.listdir(data_path) if folder!=".vscode"]
     
     return next(participant_path for participant_path in participant_folders
-        if get_subject(os.path.join(participant_path,"participant.json"))==participant_target)
+                    if get_subject(os.path.join(participant_path,"participant.json"))==participant_target)
 
+class AttrDisplay:
+    """
+    Provides an inheritable display overload method that shows
+    instances with their class names and a name=value pair for
+    each attribute stored on the instance itself (but not attrs
+    inherited from its classes). Can be mixed into any class,
+    and will work on any instance.
+    """
+    def gatherAttrs(self):
+        attrs = []
+        for key in sorted(self.__dict__):
+            attrs.append('%s=%s' % (key, getattr(self, key)))
+        return ', '.join(attrs)
+
+    def __repr__(self):
+        return '[%s: %s]' % (self.__class__.__name__, self.gatherAttrs())
