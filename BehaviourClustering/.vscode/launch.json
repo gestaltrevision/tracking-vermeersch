@@ -1,0 +1,33 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": " Create Dataset script",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/process_acc_data.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--main_dir","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM",
+                "--data_type","Behaviours" ,
+                "-wd","3 ",
+                "--dataset_name", "Event_targets"
+            ]
+        },
+        {
+            "name": " Process raw data script",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/process_raw_acc.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--main_dir","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM",
+                "--data_type","Acc_Gyros" ,
+                "--base_name", "Filtered_data",
+                "-fc","10",
+                "-ns","200"
+
+            ]
+        }
+    ]
+}
