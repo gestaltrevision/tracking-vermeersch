@@ -80,11 +80,6 @@ def create_event_col(df,events_index_dict,event_col="Event"):
             index+=1   
     return clean_col
 
-def get_unique_counts(Series):
-    #CHANGE THIS !!
-    diff_values=Series.unique().tolist()
-    return diff_values
-
 def event_to_target(full_event):
     """
     Taxonomy event (Eg. "Or Mi" ,"Cp") Into binary targets
@@ -205,7 +200,7 @@ def resample_giro_components(df_giro,df_acc,samples_per_sl):
     giro_resampled=pd.DataFrame()   
     for comp in ["X","Y","Z"]:
         resample_component=[]
-        for i in tqdm(range(len(df_giro)//ns_giro)):
+        for i in range(len(df_giro)//ns_giro):
             idx=range(ns_giro*i,ns_giro*(i+1))
             raw_signal=df_giro.loc[idx,"Gyro{}".format(comp)].values
             resample_component.append(signal.resample(raw_signal,samples_per_sl))
@@ -261,17 +256,31 @@ def create_targets_idx(df):
     df["target"]=df.apply(lambda row: event_to_target(row["Event_col"]),axis=1)
     df=df.drop(columns="Event")
     return df
-def data_to_mult_idx(sensors_data,participant,samples_per_sl=200):
+
+def return_unique(Series):
+    unique_values=Series.unique().tolist()
+    if len(unique_values)==1:
+        return unique_values[0]
+    else:
+        return -1
+
+def data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl=200):
     n_sliding_windows=floor(len(sensors_data)/samples_per_sl)
     idx_arr=["id{0}_{1}".format(participant,i) for i in range(n_sliding_windows)]
     
     iterables = [idx_arr, range(samples_per_sl)]
     mult_idx=pd.MultiIndex.from_product(iterables, names=['id', 'samples'])
     mult_col=pd.MultiIndex.from_product([["Acc","Gyro"],["X","Y","Z"]], names=['Magnitud', 'Component'])
+
     df_complete=pd.DataFrame(sensors_data.loc[:len(mult_idx)-1].values,
                             index=mult_idx,
                             columns=mult_col)
-                           
+
+    target_data=pd.DataFrame(target_data.loc[:len(mult_idx)-1,"target"].values,
+                            index=mult_idx,
+                            columns=["target"])
+    
+    df_complete["target"]=target_data
     return df_complete
 
 def process_readings_participant(df,participant,fc=15,samples_per_sl=200):
@@ -290,34 +299,20 @@ def process_readings_participant(df,participant,fc=15,samples_per_sl=200):
     ##Gravity removal and low-pass filter at 15Hz for each comp
     for comp in sensors_data.columns:
         sensors_data[comp]=filter_noise_gravity(sensors_data[comp].values,fc=15)
+
     #MULTI-INDEX
-    df_complete=data_to_mult_idx(sensors_data,samples_per_sl) 
-
+    df_complete=data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl) 
     ##FILTER IDS
-        #grouby
-        #get ids with just one label ("clean ids")
-        #keep just samples,targets for (clean ids)
-    return df_complete,target_data
-
-##FILTER IDS !
-
-
-
-if __name__ == "__main__":
-    import pandas as pd
-    import numpy as np
-    import os
+    #get target for each sliding window
+    target_series=df_complete["target"].groupby("id").agg(return_unique)
+    #keep only "pure" targets (all observations in each sl is the same)
+    target_series=target_series[target_series!=-1]
+    #filter the dataset, using the previous ids
+    df_complete=df_complete.loc[target_series.index]
     
-    ##open table
-    sensors_data=pd.read_csv("test_table.csv")
-    samples_per_sl=200
-    x=sensors_data["AccX"].values
-    x_filtered=filter_noise_gravity(x,fc=15)
+    return df_complete
 
-    print("Hola jeje")
-   
 
-    pass
 
 
 

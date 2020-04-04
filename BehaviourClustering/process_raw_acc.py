@@ -26,7 +26,8 @@ parser.add_argument('-fc','--cut_freq', nargs='?', const=10, type=int, default=1
                     help="Cut-off frequency of filter")
 if __name__ == "__main__":
     # Sample usage :
-    #python process_raw_acc.py --main_dir "C:\Users\jeuux\Desktop\Carrera\MoAI\TFM" --data_type Acc_Gyros 
+    #python process_raw_acc.py --main_dir "C:\Users\jeuux\Desktop\Carrera\MoAI\TFM" --data_type Acc_Gyros --base_name Final_data
+    #
     args=parser.parse_args()
     acc_path=os.path.join(args.main_dir,"AnnotatedData","Accelerometer_Data")
     participant_path=os.path.join(acc_path,"Participants")
@@ -39,7 +40,7 @@ if __name__ == "__main__":
         file=os.path.join(folder,"{0}_raw_{1}.csv".format(args.data_type,participant))
 
         #convert raw acc data into standard form
-        df=process_readings_participant(pd.read_csv(file),args.cut_freq,args.n_samples)
+        df=process_readings_participant(pd.read_csv(file),participant,args.cut_freq,args.n_samples)
 
         #save processed df of each participant into its correspondent folder
         dir_path=os.path.join(os.path.dirname(file),"{0}_{1}.csv".format(args.base_name,participant))
