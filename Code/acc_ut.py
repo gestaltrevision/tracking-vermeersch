@@ -99,32 +99,30 @@ def event_to_target(full_event):
         return -1
 
 def create_df_participant(df):
-    cols=["id","Recording timestamp",
-            "AccX","AccY","AccZ",
-            "GyroX","GyroY","GyroZ"]
+    #Drop NaN
     df=df.dropna()
-    df_targets=df[["id","Event_col"]]
-    df_feat=df[cols]
+    #targets for each sliding window (id)
+    targets=df["target"].groupby(level="id").agg(return_unique).tolist()
+    #Reconstruct comp table
+    df=df._drop_axis("target",axis=1)
+    #create id
+    idx_slice=df.index.tolist() #idx_slice contains ids' and samples
+    idx_list=[el[0] for el in idx_slice] #get only ids
+    #get targets
+    cols=df.columns
+    flat_cols=["".join(comp) for comp in cols]
+    #"Flat" dataframe
+    df_feat=pd.DataFrame(df.values,columns=flat_cols)
+    df_feat["id"]=idx_list
     
-    ##Filter data (just get samples from windows with one label) 
-    group_targets=df_targets.groupby(df_feat["id"]).aggregate({"Event_col":get_unique_counts }, index=False)
-
-    group_targets["unique_target"]=group_targets.apply(lambda row:type(row["Event_col"])==np.ndarray ,axis=1)
-    df_feat_clean=df_feat.set_index("id").loc[group_targets["unique_target"]==False]
-    
-    group_targets_clean=group_targets[group_targets["unique_target"]==False]
-    df_feat_clean=df_feat_clean.reset_index(drop=False)
-        
     #Feature extraction
-    extracted_features = extract_features(df_feat_clean,
+    extracted_features = extract_features(df_feat,
                                             column_id="id",column_sort="Recording timestamp",
-                                            default_fc_parameters=EfficientFCParameters())                          
+                                            default_fc_parameters=MinimalFCParameters())                          
 
     #Feature filtering
     impute(extracted_features)
-    extracted_features["event_target"]=group_targets_clean["Event_col"]
-    extracted_features["event_cat"]=extracted_features.event_target.apply(lambda el: create_event_label(el))
-    extracted_features["target"] = extracted_features.event_cat.replace({"Or Mi":0 ,"Cp":1})
+    extracted_features["target"]=targets
 
     return extracted_features.reset_index(drop=False)
 
@@ -187,14 +185,38 @@ def filter_noise_gravity(x,fc,sample_rate=100):
             x:signal
             fc:cut-off freq filter
     output:
-            filtered_signal 
+            filtered_signal ,gravity_comp
     """
     cutoff_frequency_gravity = 0.3
     gravity_comp = butter_lowpass_filter(x, cutoff_frequency_gravity, sample_rate/2)
     diff = np.array(x)-np.array(gravity_comp)
     filtered_signal=butter_lowpass_filter(diff,fc,sample_rate/2)
+    return filtered_signal,gravity_comp
+
+def filter_noise(x,fc,sample_rate=100):
+    """Function to filter high freq noise from readings
+    input:
+            x:signal
+            fc:cut-off freq filter
+    output:
+            filtered_signal 
+    """
+    filtered_signal = butter_lowpass_filter(x, fc, sample_rate/2)
     return filtered_signal
 
+def components_processing(sensors_data,fc,sample_rate=100):
+    for component in sensors_data.columns:
+        signal=sensors_data[component].values
+        if("Acc" in component):
+            filtered_signal,gravity_comp=filter_noise_gravity(signal,fc,sample_rate)
+            #get gravity_free filter
+            sensors_data[component ]=filtered_signal
+            #total acc
+            sensors_data["{}_total".format(component)]=filtered_signal+gravity_comp
+        elif("Giro" in component):
+            sensors_data[component]=filter_noise(signal,fc,sample_rate)
+    return sensors_data
+    
 def resample_giro_components(df_giro,df_acc,samples_per_sl):
     ns_giro=get_samples_giro(df_giro,df_acc,samples_per_sl) #samples giro == time samples acc 
     giro_resampled=pd.DataFrame()   
@@ -270,17 +292,19 @@ def data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl=200):
     
     iterables = [idx_arr, range(samples_per_sl)]
     mult_idx=pd.MultiIndex.from_product(iterables, names=['id', 'samples'])
-    mult_col=pd.MultiIndex.from_product([["Acc","Gyro"],["X","Y","Z"]], names=['Magnitud', 'Component'])
-
+    mult_col=pd.MultiIndex.from_product([["Acc","Gyro","Acc_total"],["X","Y","Z"]], names=['Magnitud', 'Component'])
+                        
     df_complete=pd.DataFrame(sensors_data.loc[:len(mult_idx)-1].values,
                             index=mult_idx,
                             columns=mult_col)
 
-    target_data=pd.DataFrame(target_data.loc[:len(mult_idx)-1,"target"].values,
+    target_data=pd.DataFrame(target_data.loc[:len(mult_idx)-1].values,
                             index=mult_idx,
-                            columns=["target"])
-    
-    df_complete["target"]=target_data
+                            columns=["Recording timestamp","target"])
+
+    df_complete["target"]=target_data["target"]
+    df_complete["Recording timestamp"]=target_data["Recording timestamp"]
+
     return df_complete
 
 def process_readings_participant(df,participant,fc=15,samples_per_sl=200):
@@ -297,9 +321,7 @@ def process_readings_participant(df,participant,fc=15,samples_per_sl=200):
     #Separate raw acc and gyro data
     target_data,sensors_data=get_raw_data(df,samples_per_sl)
     ##Gravity removal and low-pass filter at 15Hz for each comp
-    for comp in sensors_data.columns:
-        sensors_data[comp]=filter_noise_gravity(sensors_data[comp].values,fc=15)
-
+    sensors_data=components_processing(sensors_data,fc)
     #MULTI-INDEX
     df_complete=data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl) 
     ##FILTER IDS
@@ -314,6 +336,20 @@ def process_readings_participant(df,participant,fc=15,samples_per_sl=200):
 
 
 
+# if __name__ == "__main__":
+#     table_path=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Participants\010419c\Acc_Gyros\Final_data_010419c.pkl"
+#     df=pd.read_pickle(table_path)
+#     df_feat=create_df_participant(df)
 
+if __name__=="__main__":
+    import shutil
+    import os 
 
+    participant_path=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Participants"
+    data_folder=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Datasets\Gyro_Features"
+    for participant in os.listdir(participant_path):
+        base_name="feature_dataset{}.csv".format(participant)
+        table_path=os.path.join(participant_path,participant,"Acc_Gyros",base_name)
 
+        shutil.copy(table_path,os.path.join(data_folder,base_name))
+        print("Copied...")

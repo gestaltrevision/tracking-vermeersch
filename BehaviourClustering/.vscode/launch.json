@@ -9,10 +9,9 @@
             "console": "integratedTerminal",
             "args": [
                 "--main_dir","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM",
-                "--data_type","Behaviours" ,
-                "-wd","3 ",
-                "--dataset_name", "Event_targets"
-            ]
+                "--data_type","Acc_Gyros" ,
+                "--dataset_name", "Gyro_Features"
+            ]   
         },
         {
             "name": " Process raw data script",

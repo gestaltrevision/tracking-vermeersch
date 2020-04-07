@@ -43,8 +43,8 @@ if __name__ == "__main__":
         df=process_readings_participant(pd.read_csv(file),participant,args.cut_freq,args.n_samples)
 
         #save processed df of each participant into its correspondent folder
-        dir_path=os.path.join(os.path.dirname(file),"{0}_{1}.csv".format(args.base_name,participant))
-        df.to_csv(dir_path,index=False)
+        dir_path=os.path.join(os.path.dirname(file),"{0}_{1}.pkl".format(args.base_name,participant))
+        df.to_pickle(dir_path)
 
         print("Succesfully raw data  of participant : {} processed".format(participant))
     pass
