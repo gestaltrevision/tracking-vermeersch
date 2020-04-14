@@ -212,7 +212,7 @@ def components_processing(sensors_data,fc,sample_rate=100):
             #get gravity_free filter
             sensors_data[component ]=filtered_signal
             #total acc
-            sensors_data["{}_total".format(component)]=filtered_signal+gravity_comp
+            # sensors_data["{}_total".format(component)]=filtered_signal+gravity_comp
         elif("Giro" in component):
             sensors_data[component]=filter_noise(signal,fc,sample_rate)
     return sensors_data
@@ -230,7 +230,7 @@ def resample_giro_components(df_giro,df_acc,samples_per_sl):
     return giro_resampled
 
 ### Process acc_giro
-def get_raw_data(df,samples_per_sl):
+def get_raw_data(df,samples_per_sl,fc,sample_rate=100):
     """Extracting raw accelerometer and gyroscope data seperately
         in order to preprocess them 
     """
@@ -263,9 +263,9 @@ def get_raw_data(df,samples_per_sl):
                     left_index=True,
                     right_index=True,
                     how="left")
-    target_data=df_raw[["Recording timestamp","target"]]
-    sensors_data=df_raw.drop(columns=["Recording timestamp","target"])
-    return target_data, sensors_data
+
+    df_raw=components_processing(df_raw,fc,sample_rate)
+    return df_raw
 
 def create_targets_idx(df):
     """input:
@@ -307,6 +307,27 @@ def data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl=200):
 
     return df_complete
 
+def windows(data, size):
+    start = 0
+    while start < len(data):
+        yield int(start), int(start + size)
+        start += (size / 2)
+import scipy.stats as stats
+
+def segment_signal(data,new_samples_number,window_size = 240,n_components=6):
+    segments = np.empty((0,new_samples_number,n_components))
+    labels = np.empty((0))
+    components=[col for col in data.columns if ("Acc" in col) or ("Gyro" in col)]
+
+    for (start, end) in windows(data.index, window_size):
+        #Only keep valid targets (0/1)
+        if(stats.mode(data["target"][start:end])[0][0]!=-1):
+            labels = np.append(labels,stats.mode(data["target"][start:end])[0][0])
+            sample=signal.resample(data[components][start:end].values,new_samples_number)#Resample signals
+            sample=np.expand_dims(sample,axis=0) #Add batch dimension
+            segments = np.vstack([segments,sample])
+    return segments, labels
+
 def process_readings_participant(df,participant,fc=15,samples_per_sl=200):
     """
     fc=cut-off frequecy for filter
@@ -317,39 +338,23 @@ def process_readings_participant(df,participant,fc=15,samples_per_sl=200):
     df=pd.merge(df,
                 target_df,
                 on="Recording timestamp")
-    df=df[df["target"]!=-1]
     #Separate raw acc and gyro data
-    target_data,sensors_data=get_raw_data(df,samples_per_sl)
-    ##Gravity removal and low-pass filter at 15Hz for each comp
-    sensors_data=components_processing(sensors_data,fc)
-    #MULTI-INDEX
-    df_complete=data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl) 
-    ##FILTER IDS
-    #get target for each sliding window
-    target_series=df_complete["target"].groupby("id").agg(return_unique)
-    #keep only "pure" targets (all observations in each sl is the same)
-    target_series=target_series[target_series!=-1]
-    #filter the dataset, using the previous ids
-    df_complete=df_complete.loc[target_series.index]
+    dataset_unsampled=get_raw_data(df,samples_per_sl,fc)
+
+    return dataset_unsampled
+
     
-    return df_complete
+    # ##Gravity removal and low-pass filter at 15Hz for each comp
+    # sensors_data=components_processing(sensors_data,fc)
+    # #MULTI-INDEX
+    # df_complete=data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl) 
+    # ##FILTER IDS
+    # #get target for each sliding window
+    # target_series=df_complete["target"].groupby("id").agg(return_unique)
+    # #keep only "pure" targets (all observations in each sl is the same)
+    # target_series=target_series[target_series!=-1]
+    # #filter the dataset, using the previous ids
+    # df_complete=df_complete.loc[target_series.index]
+    
 
 
-
-# if __name__ == "__main__":
-#     table_path=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Participants\010419c\Acc_Gyros\Final_data_010419c.pkl"
-#     df=pd.read_pickle(table_path)
-#     df_feat=create_df_participant(df)
-
-if __name__=="__main__":
-    import shutil
-    import os 
-
-    participant_path=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Participants"
-    data_folder=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Datasets\Gyro_Features"
-    for participant in os.listdir(participant_path):
-        base_name="feature_dataset{}.csv".format(participant)
-        table_path=os.path.join(participant_path,participant,"Acc_Gyros",base_name)
-
-        shutil.copy(table_path,os.path.join(data_folder,base_name))
-        print("Copied...")
