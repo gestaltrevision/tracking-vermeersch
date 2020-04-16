@@ -5,16 +5,22 @@ import joblib
 import numpy as np
 from IMU_ut import plot_grad_flow
 
+# Recurrent neural network (many-to-one)
 class RNN(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers, num_classes):
         super(RNN, self).__init__()
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True,dropout=0.8)
-                            
-        self.relu=nn.ReLU()
-        self.fc = nn.Linear(hidden_size, num_classes)
+        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True,dropout=0.75)
+        self.bn1=nn.BatchNorm1d(hidden_size)
+        self.fc1=nn.Linear(hidden_size,int(hidden_size/2))
+        self.relu=nn.ReLU()  
+        self.bn2=nn.BatchNorm1d(int(hidden_size/2))
     
+        self.fc2=nn.Linear(int(hidden_size/2),num_classes)
+        self.dropout = nn.Dropout(p=0.75)
+
+        
     def forward(self, x):
         # Set initial hidden and cell states 
         h0 = torch.zeros(self.num_layers, x.size(0), self.hidden_size).to(device) 
@@ -24,14 +30,13 @@ class RNN(nn.Module):
         out, _ = self.lstm(x, (h0, c0))  # out: tensor of shape (batch_size, seq_length, hidden_size)
         
         # Decode the hidden state of the last time step
-        out = self.fc(out[:, -1, :])
-        out=F.softmax(out,dim=1)
+
+        # out=self.relu(out[:, -1, :])
+        out=self.bn1(out[:, -1, :])
+        out=self.dropout(self.relu(self.fc1(out)))
+        out=self.fc2(out)
+
+        out=F.log_softmax(out,dim=1)
         return out
 
-class Trainer(object):
-  def __init__(self,model,criterion,optimizer,device):
-    self.model=model
-    self.criterion=criterion
-    self.optimizer=optimizer
-    self.device=device
 
