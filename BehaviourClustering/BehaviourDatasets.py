@@ -16,6 +16,7 @@ class IMUDataset(Dataset):
                 we define the scaler over training set and we save it
                 
             When loading test set, we ommit this value and fit the previously fit scaler over training set
+        set_cat= string with name of set of data (Train , Validation or Test)
     output:
         samples (n_samples,sequence_length,n_components):
             Array containing the readings of each component over a number of different windows(n_samples)
@@ -23,10 +24,10 @@ class IMUDataset(Dataset):
             Array containing the target (Binary) over each of the correspondant samples
         
     """
-    def __init__(self,folder,scaler,train=True):
+    def __init__(self,folder,scaler,set_cat):
         #Get folder ("Train" or "Test")
-        data_type= "Train" if train else "Test"
-        self.data_folder=os.path.join(folder,data_type)
+        self.data_folder=os.path.join(folder,set_cat)
+        assert os.path.isdir(self.data_folder) 
         #Load data    
         self.targets=np.load(os.path.join(self.data_folder,"targets.npy"))
         self.data=np.load(os.path.join(self.data_folder,"samples.npy"))
@@ -35,7 +36,7 @@ class IMUDataset(Dataset):
         self.data=self.data.reshape(-1,n_components)
         
         #Scalling
-        if(train):
+        if(set_cat=="Train"):
           self.scaler=scaler.fit(self.data)
           #save scaler (in dataset folder)
           joblib.dump(self.scaler,os.path.join(folder,'scaler_train.pkl'))
