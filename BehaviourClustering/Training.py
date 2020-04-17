@@ -8,28 +8,28 @@ from sklearn.model_selection import train_test_split,cross_val_score,cross_valid
 from tqdm.notebook import tqdm
 
 from sklearn.preprocessing import RobustScaler,StandardScaler
-from IMU_ut import plot_grad_flow,prepare_IMU_batch
+from pytorchtools import plot_grad_flow,prepare_IMU_batch
 from torch.utils.tensorboard import SummaryWriter
 from sklearn.metrics import balanced_accuracy_score,f1_score,precision_score,matthews_corrcoef
 
 class Trainer(object):
-  def __init__(self,model,criterion,learning_rate,data_loaders,device):
-    self.model=model.to(device)
+  def __init__(self,model,criterion,learning_rate,data_loaders,prepare_batch):
+    self.device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    self.model=model.to(self.device)
     self.criterion=criterion
-    self.device=device
     self.train_loader, self.valid_loader = data_loaders
-    #Generalize this
-    self.optimizer=torch.optim.Adam(
-                    self.model.parameters(),
-                    lr=learning_rate,
-                    #optionals...
-                    # momentum=0.9
+    self.optimizer= torch.optim.Adam(
+                            self.model.parameters(),
+                            lr=learning_rate,
+                            #optionals...
+                            # momentum=0.9
     )
+    self.prepare_batch=prepare_batch
   
   def inference(self,batch):
     self.model.eval()
     with torch.no_grad():
-        samples,labels=prepare_IMU_batch(batch,self.device)
+        samples,labels=self.prepare_batch(batch,self.device)
         labels_pred = self.model(samples)
         return labels_pred, labels
 
@@ -37,7 +37,7 @@ class Trainer(object):
     # Training mode
     self.model.train()
     #get batch data
-    samples,labels=prepare_IMU_batch(batch,self.device  )
+    samples,labels=self.prepare_batch(batch,self.device)
     # Forward pass
     outputs = self.model(samples)
     loss = self.criterion(outputs, labels)
@@ -49,7 +49,7 @@ class Trainer(object):
     #Gradient Flow to debug
     # plot_grad_flow(model.named_parameters())
     # Gradient clipping(prevent gradient explotion)
-    torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
+    # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
     #Optimizer step
     self.optimizer.step()
     
@@ -108,7 +108,7 @@ class Trainer(object):
     for epoch in tqdm(range(num_epochs)):
         running_loss,running_metrics= self.init_metrics(metrics_dict)
         for i, batch in enumerate(self.train_loader):
-          
+
           running_loss+=self.train_batch(batch)
           test_batch=next(iter(self.valid_loader))
 
@@ -137,5 +137,3 @@ class Trainer(object):
 
     self.writer.close()
     return True
-
-
