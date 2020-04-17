@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import joblib
 import numpy as np
-from IMU_ut import plot_grad_flow
+from pytorchtools import plot_grad_flow
 
 
 class HAR_RNN(nn.Module):
