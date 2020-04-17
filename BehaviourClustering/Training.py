@@ -102,34 +102,40 @@ class Trainer(object):
                           epoch * len(self.train_loader) + i)
 
    
-  def train(self,num_epochs,training_path,metrics_dict,log_interval=10):
-    #Init tensordboard writer for current running
+  def train(self,num_epochs,training_path,metrics_dict,early_stopping,log_interval=10):
+
     self.writer = SummaryWriter(training_path)
-    best_loss=10e6
     for epoch in tqdm(range(num_epochs)):
         running_loss,running_metrics= self.init_metrics(metrics_dict)
         for i, batch in enumerate(self.train_loader):
-            #Train pipeline for current training batch
-            running_loss+=self.train_batch(batch)
-            #Get validation batch and evaluate current model
-            test_batch=next(iter(self.valid_loader))
-            running_metrics=self.evaluate_batch(test_batch,
-                                                running_metrics,
-                                                metrics_dict)
-                                                
-            #Logging                                     
-            if (i+1) % log_interval == 0:
-              self.log_metrics(running_loss,
-                               running_metrics,
-                               epoch,i,
-                               log_interval)
-              
-              if(running_metrics["loss"]<best_loss):
-                torch.save(self.model.state_dict(),
-                           os.path.join(training_path,"model.pth"))
-                              
-              #reset running metrics
-              running_loss,running_metrics=self.init_metrics(metrics_dict)
+          
+          running_loss+=self.train_batch(batch)
+          test_batch=next(iter(self.valid_loader))
+
+          running_metrics=self.evaluate_batch(test_batch,
+                                              running_metrics,
+                                              metrics_dict)
+                                              
+                                              
+          if (i+1) % log_interval == 0:
+            self.log_metrics(running_loss,
+                            running_metrics,
+                            epoch,i,
+                            log_interval)
+            
+            #Check if we are overfitting 
+            early_stopping(running_metrics["loss"]/log_interval, 
+                            self.model,
+                            training_path)
+      
+            if early_stopping.early_stop:
+                print("Early stopping")
+                return True
+                            
+            #reset running metrics
+            running_loss,running_metrics=self.init_metrics(metrics_dict)
 
     self.writer.close()
+    return True
+
 
