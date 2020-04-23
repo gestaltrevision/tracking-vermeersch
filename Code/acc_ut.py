@@ -36,67 +36,6 @@ def comma_to_float(str_number):
     else:
         return str_number
 
-def get_events(df,event_col="Event"):
-    """Get unique behaviours from dataset and create movement label
-        Movement label depents on type of behavior
-        True=Moving ; False=Still"""
-    events=df[event_col].unique().tolist()
-    nan_event=next(event for event in events if type(event)!=str)
-    events.remove(nan_event)
-    #Or-->Orientation Minor (Still); Cp-->Changing Perspective (Movement)
-    events_list=[event for event in events if ("Or Mi" in event ) or ("Cp" in event)]
-
-    return events_list
-
-def get_events_index(df,events_list,event_col="Event"):
-    col=df[event_col].dropna()
-    event_index_dict={event:[] for event in events_list}
-    index_list=col.index.tolist()    
-    for i,index in enumerate(index_list):
-        if(col[index] in events_list):
-            #save index and beahaviour
-            start=index
-            event=col[index]
-            #get stop
-            try:
-                stop=next(index for index in index_list[i:-1] if "00" in col[index])
-            except:
-                    return ValueError
-            #save event, start, stop
-            event_index_dict[event].append([start,stop])
-    return event_index_dict
-    
-def create_event_col(df,events_index_dict,event_col="Event"):
-    col=df[event_col]
-    clean_col=[0]*len(col)
-    index=0
-    while index < len(col) :
-        if (col[index]  in events_index_dict.keys()):
-            event=col[index]
-            start,stop=next(el for el in events_index_dict[event] if el[0]==index)
-            clean_col[start:stop]=[event for _ in range (stop-start)]
-            index=stop+1  
-        else:
-            index+=1   
-    return clean_col
-
-def event_to_target(full_event):
-    """
-    Taxonomy event (Eg. "Or Mi" ,"Cp") Into binary targets
-    If event in Changing perspective group (Cp) --> target =1
-    If event in Orientation Minor group (Or Mi) --> target = 0
-    Rest of the cases --> target =-1 (Will remove these)
-    """
-    try:
-        assert type(full_event)!=int
-        if("Cp" in full_event):
-            return 1
-        elif("Or Mi" in full_event):
-            return 0
-        else:
-            return -1
-    except:
-        return -1
 
 def create_df_participant(df):
     #Drop NaN
@@ -126,165 +65,126 @@ def create_df_participant(df):
 
     return extracted_features.reset_index(drop=False)
 
-##EDA 
-def univariate_outlier(df,feat,outliers_fraction=0.05):
-    X = df[feat].values.reshape(-1,1)
-    # Isolation Forest classifier
-    clf= IForest(contamination=outliers_fraction)
-    clf.fit(X)
-    # prediction of a datapoint category outlier or inlier
-    y_pred = clf.predict(X)
-    return y_pred.tolist()
 
-def get_outliers_dataset(dataset,components,features,outliers_fraction=0.05):
-    # components=["AccX","AccY","AccZ"]
-    # features=["mean","standard_deviation"]
-    outlier_dict={}
-    for component in tqdm(components):
-        for feat in features:
-            feat="{0}__{1}".format(component,feat)
-            outlier_dict[feat]=univariate_outlier(dataset,feat,outliers_fraction)
-    
-    outlier_list=np.any(np.stack(list(outlier_dict.values()),axis=1),axis=1)
 
-    return outlier_dict,outlier_list
-
-def get_series_diff(df,name,samples_per_sl=200):
-    #get difference (starting-end times) for each 200 samples
+def get_sampling_freq(df,samples_per_sl=100):
     diff_times=[]
-    for idx in range(int(len(df)/samples_per_sl)):
-        diff_times.append(df.loc[idx+samples_per_sl,"Recording timestamp"]-df.loc[idx,"Recording timestamp"])
-        
+    for (start,end) in windows(df.index,samples_per_sl,1):
+        diff_times.append(df.loc[end,"Recording timestamp"]-df.loc[start,"Recording timestamp"])
     diff_times=np.asarray(diff_times,dtype=np.int32)
-    return pd.Series(diff_times,name=name)
+    mean_sampling_freq=np.mean(diff_times)
+    return mean_sampling_freq
 
-def get_samples_giro(df_giro,df_acc,samples_per_sl=200):
-    diff_giro=get_series_diff(df_giro,"giro")
-    diff_acc=get_series_diff(df_acc,"acc")
+def get_new_samples(df_resampling,df_base,samples_per_sl=100):
+    unsampled_freq=get_sampling_freq(df_resampling,samples_per_sl)
+    sampled_freq=get_sampling_freq(df_base,samples_per_sl)
+
+    samples_new=(sampled_freq/unsampled_freq)*samples_per_sl
     
-    mean_sl_giro=diff_giro.describe()["mean"]
-    mean_sl_acc=diff_acc.describe()["mean"]
-    samples_giro_new=(mean_sl_acc/mean_sl_giro)*samples_per_sl
+    return int(samples_new)
+
     
-    return int(samples_giro_new)
-
-def butter_lowpass(cutoff, nyq_freq, order=6):
-    normal_cutoff = float(cutoff) / nyq_freq
-    b, a = signal.butter(order, normal_cutoff, btype='lowpass')
-    return b, a
-
-def butter_lowpass_filter(data, cutoff_freq, nyq_freq, order=6):
-    b, a = butter_lowpass(cutoff_freq, nyq_freq, order=order)
-    y = signal.filtfilt(b, a, data)
-    return y
-# Filter signal x, result stored to y: 
-def filter_noise_gravity(x,fc,sample_rate=100):
-    """Function to remove gravity comp from readings and
-        filtering the "gravity-free" signal
-    input:
-            x:signal
-            fc:cut-off freq filter
-    output:
-            filtered_signal ,gravity_comp
-    """
-    cutoff_frequency_gravity = 0.3
-    gravity_comp = butter_lowpass_filter(x, cutoff_frequency_gravity, sample_rate/2)
-    diff = np.array(x)-np.array(gravity_comp)
-    filtered_signal=butter_lowpass_filter(diff,fc,sample_rate/2)
-    return filtered_signal,gravity_comp
-
-def filter_noise(x,fc,sample_rate=100):
-    """Function to filter high freq noise from readings
-    input:
-            x:signal
-            fc:cut-off freq filter
-    output:
-            filtered_signal 
-    """
-    filtered_signal = butter_lowpass_filter(x, fc, sample_rate/2)
-    return filtered_signal
-
-def components_processing(sensors_data,fc,sample_rate=100):
-    for component in sensors_data.columns:
-        signal=sensors_data[component].values
-        if("Acc" in component):
-            filtered_signal,gravity_comp=filter_noise_gravity(signal,fc,sample_rate)
-            #get gravity_free filter
-            sensors_data[component ]=filtered_signal
-            #total acc
-            # sensors_data["{}_total".format(component)]=filtered_signal+gravity_comp
-        elif("Giro" in component):
-            sensors_data[component]=filter_noise(signal,fc,sample_rate)
-    return sensors_data
-    
-def resample_giro_components(df_giro,df_acc,samples_per_sl):
-    ns_giro=get_samples_giro(df_giro,df_acc,samples_per_sl) #samples giro == time samples acc 
-    giro_resampled=pd.DataFrame()   
+def resample_category_readings(df_resampling,df_base,shorting,samples_per_sl):
+    ns_new=get_new_samples(df_resampling,df_base,samples_per_sl) #samples giro == time samples acc 
+    df_resampled=pd.DataFrame()   
     for comp in ["X","Y","Z"]:
         resample_component=[]
-        for i in range(len(df_giro)//ns_giro):
-            idx=range(ns_giro*i,ns_giro*(i+1))
-            raw_signal=df_giro.loc[idx,"Gyro{}".format(comp)].values
+
+        col="{}{}".format(shorting,comp)
+        for (start,end) in windows(df_resampling.index,ns_new,1):
+            raw_signal=df_resampling[col][start:end].values
             resample_component.append(signal.resample(raw_signal,samples_per_sl))
-        giro_resampled["Gyro{}".format(comp)]=np.hstack(resample_component)
-    return giro_resampled
+        df_resampled[col]=np.hstack(resample_component)
+    return df_resampled
 
-### Process acc_giro
-def get_raw_data(df,samples_per_sl,fc,sample_rate=100):
-    """Extracting raw accelerometer and gyroscope data seperately
-        in order to preprocess them 
+
+
+def windows(data, size,factor=2):
+    start = 0
+    while start + (size / factor) < len(data):
+        yield int(start), int(start + size)
+        start += (size / factor)
+import scipy.stats as stats
+
+def segment_signal(data,new_samples_number,window_size):
+    components=[col for col in data.columns if is_component(col)]
+    segments = np.empty((0,new_samples_number,len(components)))
+    labels = np.empty((0))
+
+    for (start, end) in windows(data.index, window_size):
+        subset=data["target"][start:end]
+        target=subset.mode()
+        labels = np.append(labels,target)
+        sample=signal.resample(data[components][start:end].values,new_samples_number)#Resample signals
+        sample=np.expand_dims(sample,axis=0) #Add batch dimension
+        segments = np.vstack([segments,sample])
+    return segments, labels
+
+class state_gen:
+    """"""
+    def __init__(self):
+        self.previous = -1
+
+    def __call__(self,actual):
+        if(not(pd.isnull(actual))):
+            if("AG" in actual):
+                self.previous=actual
+            else:
+                self.previous=-1
+        return self.previous
+
+def is_component(col):
+    return ("X" in col) | ("Y" in col) | ("Z" in col)
+
+def get_data_subset(df,category,short):
     """
-    giro_cols=["Recording timestamp","Gyro X","Gyro Y","Gyro Z","target"]
-    df_giro=df[giro_cols]
-    df_giro=df_giro.rename(columns={"Gyro X":"GyroX",
-                                    "Gyro Y":"GyroY",
-                                    "Gyro Z":"GyroZ"})   
-                
-    df_giro=df_giro.dropna().reset_index(drop=True)
+    """
+    base_cols=["Recording timestamp","target"]
+    components=["X","Y","Z"]
+    data_cols=["{} {}".format(category,component) for component in components]
+    df=df[data_cols+base_cols]
+    columns_renaming={"{} {}".format(category,component):"{}{}".format(short,component)
+                            for component in components}
 
-    acc_cols=["Recording timestamp","Accelerometer X","Accelerometer Y","Accelerometer Z","target"]
-    df_acc=df[acc_cols]
-    df_acc=df_acc.rename(columns={"Accelerometer X":"AccX",
-                                    "Accelerometer Y":"AccY",
-                                    "Accelerometer Z":"AccZ"})
-                                    
-    df_acc=df_acc.dropna().reset_index(drop=True)
+    df=df.rename(columns=columns_renaming)   
+    df=df.dropna().sort_index().drop_duplicates()
+    return df.reset_index(drop=True)
 
-    ##convert samples from str to float 
-    for comp in ["X","Y","Z"]:
-        acc_comp,giro_comp="Acc{}".format(comp),"Gyro{}".format(comp)
-        df_acc[acc_comp]=df_acc.apply(lambda row :comma_to_float(row[acc_comp]), axis = 1)
-        df_giro[giro_comp]=df_giro.apply(lambda row :comma_to_float(row[giro_comp]), axis = 1)
-    ##resample
-    df_giro=resample_giro_components(df_giro,df_acc,samples_per_sl)
-    #merge
-    df_raw=pd.merge(df_acc,
-                    df_giro,
-                    left_index=True,
-                    right_index=True,
-                    how="left")
+from functools import reduce
 
-    df_raw=components_processing(df_raw,fc,sample_rate)
-    return df_raw
+def process_readings_participant(df,participant,samples_per_sl=100):
+    """
+    fc=cut-off frequecy for filter
+    f=sampling freq (Our sensors have an approx sampling freq of 100 Hz)
+    """
+    data_cats=["Accelerometer","Gyro","Gaze point 3D"]
+    short_cats=["Acc","Gyro","Gaze"]
 
-def create_targets_idx(df):
-    """input:
-           df with Event
-            sample_rate(msecs)"""
-    #Get available Ground truth 
-    events_list=get_events(df)
-    events_dict_index=get_events_index(df,events_list)
-    df["Event_col"]=create_event_col(df,events_dict_index)
-    df["target"]=df.apply(lambda row: event_to_target(row["Event_col"]),axis=1)
-    df=df.drop(columns="Event")
-    return df
+    ##get targets
+    generator=state_gen()
+    df["target"]=df["Event"].apply(lambda event: generator(event))
+    #Convert numeric str to floats
+    # df=correct_commas(df)
+    # print("floats...")
+    df_dict={}
+    df_dict["Gaze"]=get_data_subset(df,"Gaze point 3D","Gaze")
+    #cleaning raw data of each cat(remove Nans, resampling)
+    for cat,shorting in zip(data_cats,short_cats):
+        if(not("Gaze" in shorting)):
+            df_raw=get_data_subset(df,cat,shorting)
+            df_dict[shorting]=resample_category_readings(df_raw,df_dict["Gaze"],
+                                                        shorting,samples_per_sl)
+    #merging...
+    data_frames=df_dict.values()
+    df_merged = reduce(lambda  left,right: pd.merge(left,right,
+                                                    left_index=True,
+                                                    right_index=True ),
+                                                    data_frames)
 
-def return_unique(Series):
-    unique_values=Series.unique().tolist()
-    if len(unique_values)==1:
-        return unique_values[0]
-    else:
-        return -1
+                                                    
+    return df_merged
+
+
 
 def data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl=200):
     n_sliding_windows=floor(len(sensors_data)/samples_per_sl)
@@ -307,54 +207,12 @@ def data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl=200):
 
     return df_complete
 
-def windows(data, size):
-    start = 0
-    while start < len(data):
-        yield int(start), int(start + size)
-        start += (size / 2)
-import scipy.stats as stats
+if __name__ == "__main__":
+    table_path=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Participants\2504e\CompleteData\CompleteData_raw_2504e.csv"
+   
+    raw_df=pd.read_csv(table_path,decimal=',')
+    df=process_readings_participant(raw_df,"pepelui",100)
+    sensor_comp,labels=segment_signal(df,50,100)
 
-def segment_signal(data,new_samples_number,window_size = 240,n_components=6):
-    segments = np.empty((0,new_samples_number,n_components))
-    labels = np.empty((0))
-    components=[col for col in data.columns if ("Acc" in col) or ("Gyro" in col)]
-
-    for (start, end) in windows(data.index, window_size):
-        #Only keep valid targets (0/1)
-        if(stats.mode(data["target"][start:end])[0][0]!=-1):
-            labels = np.append(labels,stats.mode(data["target"][start:end])[0][0])
-            sample=signal.resample(data[components][start:end].values,new_samples_number)#Resample signals
-            sample=np.expand_dims(sample,axis=0) #Add batch dimension
-            segments = np.vstack([segments,sample])
-    return segments, labels
-
-def process_readings_participant(df,participant,fc=15,samples_per_sl=200):
-    """
-    fc=cut-off frequecy for filter
-    f=sampling freq (Our sensors have an approx sampling freq of 100 Hz)
-    """
-    ##get target,valid_ids
-    target_df=create_targets_idx(df[["Event","Recording timestamp"]])
-    df=pd.merge(df,
-                target_df,
-                on="Recording timestamp")
-    #Separate raw acc and gyro data
-    dataset_unsampled=get_raw_data(df,samples_per_sl,fc)
-
-    return dataset_unsampled
-
+    print("HI")
     
-    # ##Gravity removal and low-pass filter at 15Hz for each comp
-    # sensors_data=components_processing(sensors_data,fc)
-    # #MULTI-INDEX
-    # df_complete=data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl) 
-    # ##FILTER IDS
-    # #get target for each sliding window
-    # target_series=df_complete["target"].groupby("id").agg(return_unique)
-    # #keep only "pure" targets (all observations in each sl is the same)
-    # target_series=target_series[target_series!=-1]
-    # #filter the dataset, using the previous ids
-    # df_complete=df_complete.loc[target_series.index]
-    
-
-
