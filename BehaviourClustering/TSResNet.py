@@ -198,7 +198,6 @@ class TSResNet(nn.Module):
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
         x = self.fc(x)
-        x=F.log_softmax(x,dim=1)
         return x
 
     def forward(self, x):
@@ -206,7 +205,7 @@ class TSResNet(nn.Module):
 
 
 # def _resnet(arch, block, layers, pretrained, progress, **kwargs):
-#     model = ResNet(block, layers, **kwargs)
+#     model =TSResNet(block, layers, **kwargs)
 #     if pretrained:
 #         state_dict = load_state_dict_from_url(model_urls[arch],
 #                                               progress=progress)
@@ -214,20 +213,3 @@ class TSResNet(nn.Module):
 #     return model
 
 
-# def resnet18(pretrained=False, progress=True, **kwargs):
-#     r"""ResNet-18 model from
-#     `"Deep Residual Learning for Image Recognition" <https://arxiv.org/pdf/1512.03385.pdf>`_
-#     Args:
-#         pretrained (bool): If True, returns a model pre-trained on ImageNet
-#         progress (bool): If True, displays a progress bar of the download to stderr
-#     """
-#     return _resnet('resnet18', BasicBlock, [2, 2, 2, 2], pretrained, progress,
-#                    **kwargs)
-
-if __name__ == "__main__":
-    import torch
-    model = TSResNet(BasicBlock, [2, 2, 2, 2],n_components=9)
-    input=torch.randn(1,9,500)
-    out=model(input)
-    print(out.shape)
-    pass
