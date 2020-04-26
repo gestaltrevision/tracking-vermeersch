@@ -1,19 +1,15 @@
-import os 
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import os
-from sklearn.model_selection import train_test_split,cross_val_score,cross_validate
 from tqdm.notebook import tqdm
 
-from sklearn.preprocessing import RobustScaler,StandardScaler
-from pytorchtools import plot_grad_flow,prepare_IMU_batch
-from torch.utils.tensorboard import SummaryWriter
-from sklearn.metrics import balanced_accuracy_score,f1_score,precision_score,matthews_corrcoef
+from pytorchtools import plot_grad_flow
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
+
 class Trainer(object):
+
   def __init__(self,model,criterion,opt_parameters,data_loaders,prepare_batch):
     self.device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     self.model=model.to(self.device)
@@ -32,18 +28,26 @@ class Trainer(object):
         labels_pred = self.model(samples)
         return labels_pred, labels
   
-  def _get_metrics(self,prob_pred,labels,metrics,metrics_dict):
+  def _get_metrics(self,labels_pred,labels,metrics,metrics_dict):
     with torch.no_grad():
       #loss
-      metrics["loss"]+= self.criterion(prob_pred,labels).item()
+      metrics["loss"]+= self.criterion(labels_pred,labels).item()
       #transform tensors to numpy arrays
-      probabilities=torch.exp(prob_pred)
+      probabilities=torch.exp(labels_pred)
       labels_pred=torch.argmax(probabilities,dim=1)
       labels_pred=labels_pred.to("cpu").numpy().astype(np.int32)
       labels=labels.to("cpu").numpy().astype(np.int32)
       #get metrics
-      for metric_name,metric in metrics_dict.items():
-        metrics[metric_name]+=metric(labels_pred,labels)
+      for metric_name,metric_info in metrics_dict.items():
+
+        if(type(metric_info)==list):
+          metric_fcn=metric_info[0]
+          kwargs=metric_info[1]
+          metrics[metric_name]+=metric_fcn(labels_pred,labels,**kwargs)
+
+        else:
+          metric_fcn=metric_info
+          metrics[metric_name]+=metric_fcn(labels_pred,labels)
       return metrics
       
   def train_batch(self,batch,metrics,metrics_dict):
@@ -69,10 +73,18 @@ class Trainer(object):
     #get metrics
     return self._get_metrics(outputs,labels,metrics,metrics_dict)
 
-  def evaluate_batch(self,batch,metrics,metrics_dict):
-    prob_pred,labels=self.inference(batch)
-    return self._get_metrics(prob_pred,labels,metrics,metrics_dict)
+  def evaluate_batch(self,metrics,metrics_dict):
+    actual_metrics=self.init_metrics(metrics_dict)
+    for iterations,batch in enumerate(self.valid_loader):
+      labels_pred,labels=self.inference(batch)
+      self._get_metrics(labels_pred,labels,actual_metrics,metrics_dict)
+    
+    #mean validation metrics
+    for metric in actual_metrics.keys():
+      actual_metrics[metric]=actual_metrics[metric]/iterations
+      metrics[metric]+=actual_metrics[metric]
 
+    return metrics
 
   def init_metrics(self,metrics_dict):
     #init metrics
@@ -81,7 +93,7 @@ class Trainer(object):
     for key in metrics_dict.keys():
         running_metrics[key]=0.0
 
-    yield running_metrics
+    return running_metrics
 
   def log_metrics(self,metrics_train,metrics_eval,epoch,i,log_interval):
     #Outputing results
@@ -105,8 +117,8 @@ class Trainer(object):
     #Training /Eval Loop
     for epoch in tqdm(range(num_epochs)):
         #Init running metrics(Train/Test)
-        metrics_train=next(self.init_metrics(metrics_dict))
-        metrics_eval= next(self.init_metrics(metrics_dict))
+        metrics_train=self.init_metrics(metrics_dict)
+        metrics_eval= self.init_metrics(metrics_dict)
 
         for i, batch in enumerate(self.train_loader):
 
@@ -114,11 +126,10 @@ class Trainer(object):
                                          metrics_train,
                                          metrics_dict)
           
-          test_batch=next(iter(self.valid_loader))
+          # test_batch=next(iter(self.valid_loader))
 
-          metrics_eval=self.evaluate_batch(test_batch,
-                                              metrics_eval,
-                                              metrics_dict)
+          metrics_eval=self.evaluate_batch(metrics_eval,
+                                            metrics_dict)
                                               
           
           if (i+1) % log_interval == 0:
@@ -139,8 +150,8 @@ class Trainer(object):
                 return True
                             
             #reset running metrics
-            metrics_train=next(self.init_metrics(metrics_dict))
-            metrics_eval= next(self.init_metrics(metrics_dict))
+            metrics_train=self.init_metrics(metrics_dict)
+            metrics_eval= self.init_metrics(metrics_dict)
 
     self.writer.close()
     return True
