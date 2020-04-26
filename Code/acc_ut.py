@@ -2,6 +2,8 @@ from __future__ import division, print_function
 
 import json
 import os
+import re
+from functools import reduce
 from math import ceil, floor, pow, sqrt
 from time import time
 
@@ -25,16 +27,6 @@ from tsfresh.feature_extraction import (EfficientFCParameters,
 from tsfresh.utilities.dataframe_functions import impute
 
 from general_utilities import find_participant
-
-#Loading acc_data
-def comma_to_float(str_number):
-    if(not(pd.isnull(str_number))):
-        units,decimals=str_number.split(",")
-        factor=pow(10,len(decimals))
-        float_number=np.float32(units)+np.float32(decimals)/factor
-        return round(float_number,3)
-    else:
-        return str_number
 
 
 def create_df_participant(df):
@@ -89,8 +81,8 @@ def resample_category_readings(df_resampling,df_base,shorting,samples_per_sl):
     df_resampled=pd.DataFrame()   
     for comp in ["X","Y","Z"]:
         resample_component=[]
-
         col="{}{}".format(shorting,comp)
+
         for (start,end) in windows(df_resampling.index,ns_new,1):
             raw_signal=df_resampling[col][start:end].values
             resample_component.append(signal.resample(raw_signal,samples_per_sl))
@@ -104,7 +96,6 @@ def windows(data, size,factor=2):
     while start + (size / factor) < len(data):
         yield int(start), int(start + size)
         start += (size / factor)
-import scipy.stats as stats
 
 def segment_signal(data,new_samples_number,window_size):
     components=[col for col in data.columns if is_component(col)]
@@ -112,26 +103,39 @@ def segment_signal(data,new_samples_number,window_size):
     labels = np.empty((0))
 
     for (start, end) in windows(data.index, window_size):
-        subset=data["target"][start:end]
-        target=subset.mode()
-        labels = np.append(labels,target)
-        sample=signal.resample(data[components][start:end].values,new_samples_number)#Resample signals
-        sample=np.expand_dims(sample,axis=0) #Add batch dimension
-        segments = np.vstack([segments,sample])
+        subset=data[start:end]
+        if(subset["picture"].mode()[0]!="Null"):
+            target=subset["target"].mode()[0]
+            labels = np.append(labels,target)
+            sample=signal.resample(subset[components].values,new_samples_number)#Resample signals
+            sample=np.expand_dims(sample,axis=0) #Add batch dimension
+            segments = np.vstack([segments,sample])
+        
+    if(segments.shape[0]!=labels.shape[0]):
+        raise ValueError ("the number of samples MUST be equal to number of labels")
+        
     return segments, labels
 
 class state_gen:
     """"""
-    def __init__(self):
-        self.previous = -1
+    def __init__(self,pattern_start,pattern_stop,null_state="Null"):
+        self.previous = null_state
+        self.null_state=null_state
+        self.pattern_start=pattern_start
+        self.pattern_stop=pattern_stop
 
     def __call__(self,actual):
         if(not(pd.isnull(actual))):
-            if("AG" in actual):
+            #Start condition
+            if((re.search(self.pattern_start,actual))!=None):
                 self.previous=actual
-            else:
-                self.previous=-1
+                            
+            #End Condition
+            elif((re.search(self.pattern_stop,actual))!=None):
+                self.previous=self.null_state
+                            
         return self.previous
+      
 
 def is_component(col):
     return ("X" in col) | ("Y" in col) | ("Z" in col)
@@ -139,7 +143,7 @@ def is_component(col):
 def get_data_subset(df,category,short):
     """
     """
-    base_cols=["Recording timestamp","target"]
+    base_cols=["Recording timestamp","target","picture"]
     components=["X","Y","Z"]
     data_cols=["{} {}".format(category,component) for component in components]
     df=df[data_cols+base_cols]
@@ -150,22 +154,20 @@ def get_data_subset(df,category,short):
     df=df.dropna().sort_index().drop_duplicates()
     return df.reset_index(drop=True)
 
-from functools import reduce
 
 def process_readings_participant(df,participant,samples_per_sl=100):
     """
-    fc=cut-off frequecy for filter
-    f=sampling freq (Our sensors have an approx sampling freq of 100 Hz)
+
     """
     data_cats=["Accelerometer","Gyro","Gaze point 3D"]
     short_cats=["Acc","Gyro","Gaze"]
 
-    ##get targets
-    generator=state_gen()
-    df["target"]=df["Event"].apply(lambda event: generator(event))
-    #Convert numeric str to floats
-    # df=correct_commas(df)
-    # print("floats...")
+    ##get targets and valid intervals
+    generator_target=state_gen("AG","Behaviour End")
+    df["target"]=df["Event"].apply(lambda event: generator_target(event))
+    generator_picture=state_gen("_Y.* IntervalStart","_Y.* IntervalEnd")
+    df["picture"]=df["Event"].apply(lambda event: generator_picture(event))
+
     df_dict={}
     df_dict["Gaze"]=get_data_subset(df,"Gaze point 3D","Gaze")
     #cleaning raw data of each cat(remove Nans, resampling)
@@ -186,27 +188,6 @@ def process_readings_participant(df,participant,samples_per_sl=100):
 
 
 
-def data_to_mult_idx(sensors_data,target_data,participant,samples_per_sl=200):
-    n_sliding_windows=floor(len(sensors_data)/samples_per_sl)
-    idx_arr=["id{0}_{1}".format(participant,i) for i in range(n_sliding_windows)]
-    
-    iterables = [idx_arr, range(samples_per_sl)]
-    mult_idx=pd.MultiIndex.from_product(iterables, names=['id', 'samples'])
-    mult_col=pd.MultiIndex.from_product([["Acc","Gyro","Acc_total"],["X","Y","Z"]], names=['Magnitud', 'Component'])
-                        
-    df_complete=pd.DataFrame(sensors_data.loc[:len(mult_idx)-1].values,
-                            index=mult_idx,
-                            columns=mult_col)
-
-    target_data=pd.DataFrame(target_data.loc[:len(mult_idx)-1].values,
-                            index=mult_idx,
-                            columns=["Recording timestamp","target"])
-
-    df_complete["target"]=target_data["target"]
-    df_complete["Recording timestamp"]=target_data["Recording timestamp"]
-
-    return df_complete
-
 if __name__ == "__main__":
     table_path=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Participants\2504e\CompleteData\CompleteData_raw_2504e.csv"
    
@@ -215,4 +196,3 @@ if __name__ == "__main__":
     sensor_comp,labels=segment_signal(df,50,100)
 
     print("HI")
-    
