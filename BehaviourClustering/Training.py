@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from tqdm.notebook import tqdm
 
 from pytorchtools import plot_grad_flow
+from torch.utils.tensorboard import SummaryWriter
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
@@ -20,71 +21,6 @@ class Trainer(object):
                             **opt_parameters
     )
     self.prepare_batch=prepare_batch
-  
-  def inference(self,batch):
-    self.model.eval()
-    with torch.no_grad():
-        samples,labels=self.prepare_batch(batch,self.device)
-        labels_pred = self.model(samples)
-        return labels_pred, labels
-  
-  def _get_metrics(self,labels_pred,labels,metrics,metrics_dict):
-    with torch.no_grad():
-      #loss
-      metrics["loss"]+= self.criterion(labels_pred,labels).item()
-      #transform tensors to numpy arrays
-      probabilities=torch.exp(labels_pred)
-      labels_pred=torch.argmax(probabilities,dim=1)
-      labels_pred=labels_pred.to("cpu").numpy().astype(np.int32)
-      labels=labels.to("cpu").numpy().astype(np.int32)
-      #get metrics
-      for metric_name,metric_info in metrics_dict.items():
-
-        if(type(metric_info)==list):
-          metric_fcn=metric_info[0]
-          kwargs=metric_info[1]
-          metrics[metric_name]+=metric_fcn(labels_pred,labels,**kwargs)
-
-        else:
-          metric_fcn=metric_info
-          metrics[metric_name]+=metric_fcn(labels_pred,labels)
-      return metrics
-      
-  def train_batch(self,batch,metrics,metrics_dict):
-    # Training mode
-    self.model.train()
-    #get batch data
-    samples,labels=self.prepare_batch(batch,self.device)
-    # Forward pass
-    outputs = self.model(samples)
-    loss = self.criterion(outputs, labels)
-    assert(not(np.isnan(loss.item()))), "Your model exploded"
-    # Backward and optimize
-    self.optimizer.zero_grad()
-    loss.backward()
-
-    #Gradient Flow to debug
-    # plot_grad_flow(model.named_parameters())
-    # Gradient clipping(prevent gradient explotion)
-    # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
-    #Optimizer step
-    self.optimizer.step()
-    
-    #get metrics
-    return self._get_metrics(outputs,labels,metrics,metrics_dict)
-
-  def evaluate_batch(self,metrics,metrics_dict):
-    actual_metrics=self.init_metrics(metrics_dict)
-    for iterations,batch in enumerate(self.valid_loader):
-      labels_pred,labels=self.inference(batch)
-      self._get_metrics(labels_pred,labels,actual_metrics,metrics_dict)
-    
-    #mean validation metrics
-    for metric in actual_metrics.keys():
-      actual_metrics[metric]=actual_metrics[metric]/iterations
-      metrics[metric]+=actual_metrics[metric]
-
-    return metrics
 
   def init_metrics(self,metrics_dict):
     #init metrics
@@ -110,6 +46,77 @@ class Trainer(object):
                           'Test':metrics_eval[metric]/log_interval},
                             epoch * len(self.train_loader) + i)
 
+  def inference(self,batch):
+    self.model.eval()
+    with torch.no_grad():
+        samples,labels=self.prepare_batch(batch,self.device)
+        preds = self.model(samples)
+        return preds, labels
+
+  def _prob_to_predictions(self,preds,labels):
+    """"From model outputs (Unnormalized probabilities,Tensors) 
+        to predictions(Classes,np.array)"""
+    probabilities=F.softmax(preds,dim=1)
+    labels_pred=torch.argmax(probabilities,dim=1)
+    labels_pred=labels_pred.to("cpu").numpy().astype(np.int32)
+    labels=labels.to("cpu").numpy().astype(np.int32)
+    return labels_pred,labels
+
+  def _get_metrics(self,preds,labels,metrics,metrics_dict):
+    with torch.no_grad():
+      #loss
+      metrics["loss"]+= self.criterion(preds,labels).item()
+      #From prob to predictions and from tensor to numpy 
+      labels_pred,labels=self._prob_to_predictions(preds,labels)
+      #get metrics
+      for metric_name,metric_info in metrics_dict.items():
+        #Metric with optional parameters (eg. F1 Score)
+        if(type(metric_info)==list):
+          metric_fcn=metric_info[0]
+          kwargs=metric_info[1]
+          metrics[metric_name]+=metric_fcn(labels_pred,labels,**kwargs)
+        #Metric without optional parameters (eg. Balanced Accuracy)
+        else:
+          metric_fcn=metric_info
+          metrics[metric_name]+=metric_fcn(labels_pred,labels)
+      return metrics
+
+  def evaluate_set(self,metrics,metrics_dict):
+    actual_metrics=self.init_metrics(metrics_dict)
+    for iterations,batch in enumerate(self.valid_loader):
+      labels_pred,labels=self.inference(batch)
+      self._get_metrics(labels_pred,labels,actual_metrics,metrics_dict)
+    
+    #mean validation metrics
+    for metric in actual_metrics.keys():
+      actual_metrics[metric]=actual_metrics[metric]/iterations
+      metrics[metric]+=actual_metrics[metric]
+
+    return metrics
+        
+  def train_batch(self,batch,metrics,metrics_dict):
+    # Training mode
+    self.model.train()
+    #get batch data
+    samples,labels=self.prepare_batch(batch,self.device)
+    # Forward pass
+    outputs = self.model(samples)
+    loss = self.criterion(outputs, labels)
+    assert(not(np.isnan(loss.item()))), "Your model exploded"
+    # Backward and optimize
+    self.optimizer.zero_grad()
+    loss.backward()
+
+    #Gradient Flow to debug
+    # plot_grad_flow(model.named_parameters())
+    # Gradient clipping(prevent gradient explotion)
+    # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
+    #Optimizer step
+    self.optimizer.step()
+    
+    #get metrics
+    return self._get_metrics(outputs,labels,metrics,metrics_dict)
+
   def train(self,num_epochs,training_path,metrics_dict,early_stopping,log_interval=50):
     #Inits
     self.writer = SummaryWriter(training_path)
@@ -126,9 +133,8 @@ class Trainer(object):
                                          metrics_train,
                                          metrics_dict)
           
-          # test_batch=next(iter(self.valid_loader))
 
-          metrics_eval=self.evaluate_batch(metrics_eval,
+          metrics_eval=self.evaluate_set(metrics_eval,
                                             metrics_dict)
                                               
           
@@ -155,3 +161,5 @@ class Trainer(object):
 
     self.writer.close()
     return True
+
+

@@ -27,13 +27,20 @@ def plot_grad_flow(named_parameters):
   plt.xlabel("Layers")
   plt.ylabel("average gradient")
 
-def prepare_IMU_batch(batch,device):
+def prepare_batch_rnn(batch,device):
   samples,labels=batch
   samples = samples.to(device).float()
   labels =torch.flatten(labels).to(device).long()
 
   return samples,labels
 
+def prepare_batch_tsresnet(batch,device):
+  samples,labels=batch
+  samples=torch.transpose(samples,1,2)
+  samples = samples.to(device).float()
+  labels =torch.flatten(labels).to(device).long()
+
+  return samples,labels
 def init_weights(m):
     if type(m) == nn.LSTM:
         for name, param in m.named_parameters():

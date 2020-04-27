@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import os 
 
 class HAR_RNN(nn.Module):
     def __init__(self, hidden_size, num_layers,num_classes,
