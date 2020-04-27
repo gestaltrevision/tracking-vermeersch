@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import os 
 """Modification of Pytorch implementation of ResNet architectures to make it suitable 
     for multidimensional timeseries data"""
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
@@ -105,7 +106,7 @@ class Bottleneck(nn.Module):
 
 class TSResNet(nn.Module):
 
-    def __init__(self, block, layers,n_components, num_classes=2, zero_init_residual=False,
+    def __init__(self, block, layers,num_classes,n_components=9, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None):
         super(TSResNet, self).__init__()
@@ -204,12 +205,37 @@ class TSResNet(nn.Module):
         return self._forward_impl(x)
 
 
-# def _resnet(arch, block, layers, pretrained, progress, **kwargs):
-#     model =TSResNet(block, layers, **kwargs)
-#     if pretrained:
-#         state_dict = load_state_dict_from_url(model_urls[arch],
-#                                               progress=progress)
-#         model.load_state_dict(state_dict)
-#     return model
+def _tsresnet(arch, block, layers, pretrained,models_dir, **kwargs):
+    model =TSResNet(block, layers, **kwargs)
+    if pretrained: 
+        checkpoint_path=os.path.join(models_dir,arch,"checkpoint.pth")
+        model.load_state_dict(torch.load(checkpoint_path))
+
+    return model
+
+
+def tsresnet_shallow(pretrained=False,models_dir="", **kwargs):
+    r"""
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on HAR dataset 
+    """
+    return _tsresnet('tsresnet_shallow', BasicBlock, [1,1,1,1], pretrained,
+                        models_dir,**kwargs)
+
+def tsresnet18(pretrained=False,models_dir="", **kwargs):
+    r"""
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on HAR dataset 
+    """
+    return _tsresnet('tsresnet18', BasicBlock, [2, 2, 2, 2], pretrained,
+                    models_dir, **kwargs)
+
+def tsresnet34(pretrained=False,models_dir="", **kwargs):
+    r"""
+    Args:
+        pretrained (bool): If True, returns a model pre-trained on HAR dataset 
+    """
+    return _tsresnet('tsresnet34', BasicBlock, [3, 4, 6, 3], pretrained,
+                     models_dir , **kwargs)
 
 
