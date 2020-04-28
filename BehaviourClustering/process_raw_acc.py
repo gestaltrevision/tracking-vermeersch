@@ -38,7 +38,8 @@ if __name__ == "__main__":
     participant_folders=[os.path.join(participant_path,folder) for folder in os.listdir(participant_path)]
     new_samples_number=args.n_points
     samples_per_sl=args.n_samples
-
+    data=[]
+    targets=[]
     #open raw tables to get raw acc values and participant info
     for participant_folder in tqdm(participant_folders):
         participant=os.path.basename(participant_folder)
@@ -49,7 +50,8 @@ if __name__ == "__main__":
         raw_df=pd.read_csv(file,decimal=',')
         df=process_readings_participant(raw_df,participant,args.n_samples)
         sensor_comp,labels=segment_signal(df,new_samples_number,samples_per_sl)
-
+        data.append(sensor_comp)
+        targets.append(labels)
         np.save(os.path.join(os.path.dirname(file),'segments_data'), sensor_comp)
         np.save(os.path.join(os.path.dirname(file),'targets_data'), labels)
 
@@ -59,7 +61,20 @@ if __name__ == "__main__":
 
         print("Succesfully raw data  of participant : {} processed".format(participant))
 
+    #save full targets,readings
+    dataset_path=os.path.join(args.main_dir,
+                                "AnnotatedData",
+                                "Accelerometer_Data",
+                                "Datasets",args.dataset_name)
 
-    pass
+    if(not(os.path.isdir(dataset_path))):
+        os.makedirs(dataset_path)
+
+    data=np.concatenate(data)
+    np.save(os.path.join(dataset_path,"data"),data)
+    targets=np.concatenate(targets)
+    np.save(os.path.join(dataset_path,"targets"),targets)
+
+
 
 

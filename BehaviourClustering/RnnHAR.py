@@ -5,12 +5,12 @@ import os
 
 class HAR_RNN(nn.Module):
     def __init__(self, hidden_size, num_layers,num_classes,
-                    input_size=9,p_dropout=0.5,gpu_train=True):
+                    n_channels=9,p_dropout=0.5,gpu_train=True):
         super(HAR_RNN, self).__init__()
         self.gpu_train=gpu_train
         self.hidden_size = hidden_size
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(input_size, hidden_size, num_layers, batch_first=True,dropout=p_dropout)
+        self.lstm = nn.LSTM(n_channels, hidden_size, num_layers, batch_first=True,dropout=p_dropout)
         # self.bn1=nn.BatchNorm1d(hidden_size)
         self.fc1=nn.Linear(hidden_size,int(hidden_size/2))
         self.relu=nn.ReLU()  

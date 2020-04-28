@@ -3,12 +3,14 @@ import numpy as np
 from sklearn.metrics import confusion_matrix
 import torch
 from Training import Trainer
-
+import os 
 
 def plot_confusion_matrix(cm, classes,
+                          exp_path,
                           normalize=False,
                           title='Confusion matrix',
-                          cmap=plt.cm.Blues):
+                          cmap=plt.cm.Blues,
+                          ext="png"):
     """
     This function prints and plots the confusion matrix.
     Normalization can be applied by setting `normalize=True`.
@@ -28,7 +30,7 @@ def plot_confusion_matrix(cm, classes,
     else:
         print('Confusion matrix, without normalization')
 
-    # print(cm)
+    print(cm) #Raw Matrix 
 
     plt.imshow(cm, interpolation='nearest', cmap=cmap)
     plt.title(title)
@@ -48,16 +50,20 @@ def plot_confusion_matrix(cm, classes,
     plt.xlabel('Predicted label')
     plt.tight_layout()
 
+    fig_file= ".".join([title,ext])
+    plt.savefig(os.path.join(exp_path,'books_read.png'))
+
 
 class Evaluator(Trainer):
 
-    def __init__(self,model,criterion,dataset,data_loader,prepare_batch):
+    def __init__(self,model,criterion,dataset,data_loader,prepare_batch,exp_path):
         self.device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         self.model=model.to(self.device)
         self.criterion=criterion
         self.dataset=dataset
         self.data_loader=data_loader
         self.prepare_batch=prepare_batch
+        self.exp_path=exp_path
 
     def _get_set_predictions(self):
         true_labels=[]
@@ -82,5 +88,5 @@ class Evaluator(Trainer):
         np.set_printoptions(precision=2)
 
         # Plot normalized confusion matrix
-        plot_confusion_matrix(cnf_matrix, classes=labels_classes,
+        plot_confusion_matrix(cnf_matrix,labels_classes,self.exp_path,
                         title=title,normalize=normalize) 

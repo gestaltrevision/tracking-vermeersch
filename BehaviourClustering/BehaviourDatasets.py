@@ -40,7 +40,7 @@ class TSDataset(Dataset):
         self.targets=np.load(os.path.join(self.data_folder,"targets.npy"))
         self.data=np.load(os.path.join(self.data_folder,"data.npy"))
         #select components...
-        # self.data=self.data[:,:,3:]
+        self.data=self.data[:,:,3:]
         #Reshape as (readings/component,components) to scale data
         samples,sequence_length,n_components=self.data.shape
         self.data=self.data.reshape(-1,n_components)
