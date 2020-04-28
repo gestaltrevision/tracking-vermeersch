@@ -11,6 +11,8 @@ import os
 import numpy as np
 from torch.utils.data import Dataset,DataLoader
 import joblib
+import itertools
+
 
 
 class TSDataset(Dataset):
@@ -25,6 +27,12 @@ class TSDataset(Dataset):
                 
             When loading test set, we ommit this value and fit the previously fit scaler over training set
         set_cat= string with name of set of data (Train , Validation or Test)
+
+        "Data_types" = Array with one boolean flag indicating weather the correspondant type of
+                        data is used or not.
+
+        Data_types : [Gaze,Acc,Gyro] , Hence if we have [True,True,False] we use all data components
+                        except Gyro components
     output:
         samples (n_samples,sequence_length,n_components):
             Array containing the readings of each component over a number of different windows(n_samples)
@@ -32,7 +40,7 @@ class TSDataset(Dataset):
             Array containing the target (Binary) over each of the correspondant samples
         
     """
-    def __init__(self,folder,scaler,set_cat,encoder,n_components=6):
+    def __init__(self,folder,scaler,set_cat,encoder,data_types=[True,True,True]):
         #Get folder ("Train" or "Test")
         self.data_folder=os.path.join(folder,set_cat)
         assert os.path.isdir(self.data_folder) 
@@ -40,7 +48,8 @@ class TSDataset(Dataset):
         self.targets=np.load(os.path.join(self.data_folder,"targets.npy"))
         self.data=np.load(os.path.join(self.data_folder,"data.npy"))
         #select components...
-        self.data=self.data[:,:,3:]
+        self.data_types=data_types
+        self.data=self._select_components()
         #Reshape as (readings/component,components) to scale data
         samples,sequence_length,n_components=self.data.shape
         self.data=self.data.reshape(-1,n_components)
@@ -67,7 +76,6 @@ class TSDataset(Dataset):
         #Label encoding...
         self.targets=self.encoder.transform(self.targets)
         self.classes=self.encoder.classes_
-        #Components selection...
 
     def __len__(self):
         return len(self.targets)
@@ -76,3 +84,18 @@ class TSDataset(Dataset):
         if isinstance(idx, torch.Tensor):
                 idx = idx.tolist()
         return [self.data[idx], self.targets[idx]]
+
+    def _select_components(self):
+        assert len(self.data_types)==3 , "Need full combination of data types"
+
+        component_idxs=[[0,1,2],[3,4,5],[6,7,8]] # ids [Gaze,Acc,Gyro]
+
+        idx_selected =[component_idx * component_flag 
+                        for i,(component_flag,component_idx) in 
+                        enumerate(zip(self.data_types,component_idxs))]
+
+        idx_selected=itertools.chain.from_iterable(idx_selected)
+        idx_selected=list(idx_selected)
+        
+        return self.data[:,:,idx_selected]
+
