@@ -117,7 +117,7 @@ class Trainer(object):
     #get metrics
     return self._get_metrics(outputs,labels,metrics,metrics_dict)
 
-  def train(self,num_epochs,training_path,metrics_dict,early_stopping,log_interval=50):
+  def train(self,num_epochs,training_path,metrics_dict,early_stopping,log_interval=10):
     #Inits
     self.writer = SummaryWriter(training_path)
     scheduler = ReduceLROnPlateau(self.optimizer, 'min')
