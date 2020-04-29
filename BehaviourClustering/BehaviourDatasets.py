@@ -13,7 +13,8 @@ from torch.utils.data import Dataset,DataLoader
 import joblib
 import itertools
 
-
+from transformers import LevelSelector
+from sklearn.preprocessing import LabelEncoder
 
 class TSDataset(Dataset):
     """
@@ -40,13 +41,16 @@ class TSDataset(Dataset):
             Array containing the target (Binary) over each of the correspondant samples
         
     """
-    def __init__(self,folder,scaler,set_cat,encoder,data_types=[True,True,True]):
+    def __init__(self,folder,scaler,set_cat,level,data_types=[True,True,True]):
         #Get folder ("Train" or "Test")
         self.data_folder=os.path.join(folder,set_cat)
         assert os.path.isdir(self.data_folder) 
         #Load data    
         self.targets=np.load(os.path.join(self.data_folder,"targets.npy"))
         self.data=np.load(os.path.join(self.data_folder,"data.npy"))
+
+        #Level selector
+        self.level_selector=LevelSelector(level=level)
         #select components...
         self.data_types=data_types
         self.data=self._select_components()
@@ -54,24 +58,30 @@ class TSDataset(Dataset):
         samples,sequence_length,n_components=self.data.shape
         self.data=self.data.reshape(-1,n_components)
         
+        #filter levels
+        self.targets=self.level_selector.transform(self.targets)
+
         #Scalling/Encoding
         if(set_cat=="Train"):
           #scaler
           self.scaler=scaler.fit(self.data)
           #save scaler (in dataset folder)
           joblib.dump(self.scaler,os.path.join(folder,'scaler_train.pkl'))
+       
           #encoder
-          self.encoder=encoder().fit(self.targets)
+          self.encoder=LabelEncoder().fit(self.targets)
           joblib.dump(self.encoder,os.path.join(folder,'encoder_train.pkl'))
 
         else:
-          #get scaler file
+          #get scaler,encoder file
           scaler_file=next(file for file in os.listdir(folder) if "scaler" in file)
           encoder_file=next(file for file in os.listdir(folder) if "encoder" in file)
           self.scaler=joblib.load(os.path.join(folder,scaler_file))
-          self.encoder=joblib.load(os.path.join(folder,encoder_file))
-        #Data Scaling
+          self.encoder=joblib.load(os.path.join(folder,encoder_file))         
+
+        #Data Filtering and Scaling
         self.data=self.scaler.transform(self.data).reshape(samples,sequence_length,n_components)
+        self.data=self.data[self.level_selector.valid_idx]
 
         #Label encoding...
         self.targets=self.encoder.transform(self.targets)
