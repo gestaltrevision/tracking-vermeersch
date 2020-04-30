@@ -4,17 +4,10 @@ import os
 import numpy as np
 from torch.utils.data import Dataset,DataLoader
 import joblib
-
-import torch
-import torch.nn as nn
-import os
-import numpy as np
-from torch.utils.data import Dataset,DataLoader
-import joblib
 import itertools
 
 from transformers import LevelSelector
-from sklearn.preprocessing import LabelEncoder
+from sklearn.preprocessing import LabelEncoder, RobustScaler
 
 class TSDataset(Dataset):
     """
@@ -86,6 +79,7 @@ class TSDataset(Dataset):
         #Label encoding...
         self.targets=self.encoder.transform(self.targets)
         self.classes=self.encoder.classes_
+        self.num_classes=len(self.classes)
 
     def __len__(self):
         return len(self.targets)
@@ -109,3 +103,77 @@ class TSDataset(Dataset):
         
         return self.data[:,:,idx_selected]
 
+import random
+
+class TSDatasetSiamese(TSDataset):
+
+    def __len__(self):
+        return 1000
+
+    def __getitem__(self, index):
+        label = None
+        # ts1 = None
+        # ts2 = None
+        #ts =="time series"
+        if isinstance(index, torch.Tensor):
+                index = index.tolist()
+                
+        # get  sample from same class
+        if index % 2 == 1:
+            label = 1.0
+            #get random index
+            idx=random.randint(0,len(self.targets))
+            ts1=self.data[idx]
+            #get label of random instance
+            label_1=self.targets[idx]
+            #get random instance with label==label_1
+            ind_g = np.squeeze(np.argwhere(self.targets == label_1)) #genuine indexes
+            ts2 = self.data[int(np.random.choice(ind_g, 1))]
+
+
+        # get sample from different class
+        else:
+            label = 0.0
+            #get random index
+            idx=random.randint(0,len(self.targets))
+            ts1=self.data[idx]
+            #get label of random instance
+            label_1=self.targets[idx]
+            ind_d = np.squeeze(np.argwhere(self.targets != label_1)) #impostor indexes
+            #get random instance with label!=label_1
+            ts2 = self.data[int(np.random.choice(ind_d, 1))]
+       
+        # if self.transform:
+        #     ts1 = self.transform(ts1)
+        #     ts2 = self.transform(ts2)
+
+        return ts1, ts2, torch.from_numpy(np.array([label], dtype=np.float32))
+
+if __name__ == "__main__":
+    scaler=RobustScaler()
+    folder=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Datasets\HAR_Dataset_raw" #Dataset without label grouping
+    # Device configuration
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # Hyper-parameters
+    sequence_length = 50
+    hidden_size = 128
+    batch_size =128
+    num_layers = 2
+    num_classes = 2
+    n_filters=256
+    filter_size=5
+    data_types=[True,True,True] # select gaze
+    level="Ds"
+    n_components=9
+    #creating train and valid datasets
+    train_dataset= TSDatasetSiamese(folder,scaler,"Train",level,data_types)
+    validation_dataset= TSDatasetSiamese(folder,scaler,"Val",level,data_types)
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size,shuffle=True)
+    val_loader= DataLoader(validation_dataset, batch_size=batch_size,shuffle=True)
+    data_loaders=[train_loader,val_loader]
+
+    samples1,samples2,labels=next(iter(train_loader))
+    
+    print("Hi")
+    pass
