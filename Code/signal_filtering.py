@@ -1,3 +1,5 @@
+from scipy import signal
+import numpy as np
 
 def butter_lowpass(cutoff, nyq_freq, order=6):
     normal_cutoff = float(cutoff) / nyq_freq

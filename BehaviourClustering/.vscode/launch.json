@@ -21,12 +21,27 @@
             "console": "integratedTerminal",
             "args": [
                 "--main_dir","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM",
-                "--data_type","Acc_Gyros" ,
-                "--base_name", "Filtered_data",
-                "-fc","10",
-                "-ns","200"
+                "--data_type","CompleteData" ,
+                "--base_name", "Final_data",
+                "--dataset_name","HAR_Dataset"
 
             ]
+        },
+        {
+            "name": " Datasets Debugging",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/BehaviourDatasets.py",
+            "console": "integratedTerminal"
+
+        },
+        {
+            "name": " Net Architecture Debugging",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/siameseResnet.py",
+            "console": "integratedTerminal"
+
         }
     ]
 }

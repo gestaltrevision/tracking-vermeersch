@@ -21,9 +21,9 @@ class SiameseTSResNet(TSResNet):
         # x = self.fc(x)
         return x
 
-    def forward(self, input1,input2):
-        out1= self._forward_impl(input1)
-        out2= self._forward_impl(input1)
+    def forward(self, inputs):
+        out1= self._forward_impl(inputs[0])
+        out2= self._forward_impl(inputs[1])
 
         return [out1,out2]
 
@@ -43,39 +43,6 @@ def tsresnet_shallow(pretrained=False,models_dir="", **kwargs):
     """
     return _tsresnet('tsresnet_shallow', BasicBlock, [1,1,1,1], pretrained,
                         models_dir,**kwargs)
-
-def _prepare_sample(samples,device):
-    samples=torch.transpose(samples,1,2)
-    return samples.to(device).float()
-
-def prepare_batch_siamese(batch,device):
-    samples1,samples2, labels=batch
-    samples1= _prepare_sample(samples1,device)
-    samples2= _prepare_sample(samples2,device)
-    labels =torch.flatten(labels).to(device).long()
-    return samples1,samples2,labels
-
-import torch.nn.functional as F
-import torch.nn as nn
-
-class ContrastiveLoss(nn.Module):
-    """
-    Contrastive loss function.
-    Based on: http://yann.lecun.com/exdb/publis/pdf/hadsell-chopra-lecun-06.pdf
-    """
-
-    def __init__(self, margin=2.0):
-        super(ContrastiveLoss, self).__init__()
-        self.margin = margin
-
-    def forward(self, outputs, label):
-    
-        euclidean_distance = F.pairwise_distance(outputs[0], outputs[1], keepdim = True)
-        loss_contrastive = torch.mean((1-label) * torch.pow(euclidean_distance, 2) +
-                                      (label) * torch.pow(torch.clamp(self.margin - euclidean_distance, min=0.0), 2))
-
-
-        return loss_contrastive
 
 if __name__ == "__main__":
     from BehaviourDatasets import TSDatasetSiamese
@@ -103,15 +70,15 @@ if __name__ == "__main__":
     level="Ds"
     n_components=9
     #creating train and valid datasets
-    train_dataset= TSDatasetSiamese(folder,scaler,"Train",level,data_types)
-    validation_dataset= TSDatasetSiamese(folder,scaler,"Val",level,data_types)
+    train_dataset= TSDatasetSiamese(folder,scaler,"Train",level,10000,data_types)
+    validation_dataset= TSDatasetSiamese(folder,scaler,"Val",level,1000,data_types)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size,shuffle=True)
     val_loader= DataLoader(validation_dataset, batch_size=batch_size,shuffle=True)
     data_loaders=[train_loader,val_loader]
 
     batch=next(iter(train_loader))
-    samples1,samples2,labels= prepare_batch_siamese(batch,device)
+    samples,labels= prepare_batch_siamese(batch,device)
     
     print("Hi")
     #Init Model
@@ -119,11 +86,11 @@ if __name__ == "__main__":
     num_classes=train_dataset.num_classes
     model_arch=tsresnet_shallow
     model_params={"num_classes":num_classes,"n_components":n_components}
-    prepare_batch_fcn=prepare_batch_tsresnet
+    prepare_batch_fcn=prepare_batch_siamese
     model = model_arch(**model_params).to(device)
 
 
-    out=model(samples1,samples2)
+    out=model(samples)
 
     print("Ji again")
 

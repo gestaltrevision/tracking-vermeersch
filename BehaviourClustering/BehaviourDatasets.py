@@ -106,9 +106,12 @@ class TSDataset(Dataset):
 import random
 
 class TSDatasetSiamese(TSDataset):
+    def __init__(self,folder,scaler,set_cat,level,dataset_length,data_types=[True,True,True]):
+        super(TSDatasetSiamese,self).__init__(folder,scaler,set_cat,level,data_types)
+        self.dataset_length=dataset_length
 
     def __len__(self):
-        return 1000
+        return self.dataset_length
 
     def __getitem__(self, index):
         label = None
@@ -122,7 +125,7 @@ class TSDatasetSiamese(TSDataset):
         if index % 2 == 1:
             label = 1.0
             #get random index
-            idx=random.randint(0,len(self.targets))
+            idx=random.randint(0,len(self.targets)-1)
             ts1=self.data[idx]
             #get label of random instance
             label_1=self.targets[idx]
@@ -135,7 +138,7 @@ class TSDatasetSiamese(TSDataset):
         else:
             label = 0.0
             #get random index
-            idx=random.randint(0,len(self.targets))
+            idx=random.randint(0,len(self.targets)-1)
             ts1=self.data[idx]
             #get label of random instance
             label_1=self.targets[idx]
@@ -166,14 +169,15 @@ if __name__ == "__main__":
     level="Ds"
     n_components=9
     #creating train and valid datasets
-    train_dataset= TSDatasetSiamese(folder,scaler,"Train",level,data_types)
-    validation_dataset= TSDatasetSiamese(folder,scaler,"Val",level,data_types)
+    train_dataset= TSDatasetSiamese(folder,scaler,"Train",level,10000,data_types)
+    validation_dataset= TSDatasetSiamese(folder,scaler,"Val",level,1000,data_types)
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size,shuffle=True)
     val_loader= DataLoader(validation_dataset, batch_size=batch_size,shuffle=True)
     data_loaders=[train_loader,val_loader]
 
     samples1,samples2,labels=next(iter(train_loader))
-    
-    print("Hi")
+    print(len(train_dataset))
+    print(samples1.shape)
+    print(" ")
     pass

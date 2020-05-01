@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 
-import cv2
+# import cv2
 from time import time
 
 import os 

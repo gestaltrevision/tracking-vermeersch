@@ -39,3 +39,4 @@ class LevelSelector( BaseEstimator, TransformerMixin):
         #filter levels
         y=list(map(lambda target: self._filter_levels(target,pos) ,y))
         return  y
+        

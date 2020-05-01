@@ -26,9 +26,10 @@ class Trainer(object):
     #init metrics
     running_metrics={}
     running_metrics["loss"]=0.0
-    for key in metrics_dict.keys():
-        running_metrics[key]=0.0
-
+    if(type(metrics_dict) is dict):
+      for key in metrics_dict.keys():
+          running_metrics[key]=0.0
+          
     return running_metrics
 
   def log_metrics(self,metrics_train,metrics_eval,epoch,i,log_interval):
@@ -66,19 +67,21 @@ class Trainer(object):
     with torch.no_grad():
       #loss
       metrics["loss"]+= self.criterion(preds,labels).item()
-      #From prob to predictions and from tensor to numpy 
-      labels_pred,labels=self._prob_to_predictions(preds,labels)
       #get metrics
-      for metric_name,metric_info in metrics_dict.items():
-        #Metric with optional parameters (eg. F1 Score)
-        if(type(metric_info)==list):
-          metric_fcn=metric_info[0]
-          kwargs=metric_info[1]
-          metrics[metric_name]+=metric_fcn(labels_pred,labels,**kwargs)
-        #Metric without optional parameters (eg. Balanced Accuracy)
-        else:
-          metric_fcn=metric_info
-          metrics[metric_name]+=metric_fcn(labels_pred,labels)
+      if(type(metrics_dict) is dict):
+        #From prob to predictions and from tensor to numpy 
+        labels_pred,labels=self._prob_to_predictions(preds,labels)
+        for metric_name,metric_info in metrics_dict.items():
+          #Metric with optional parameters (eg. F1 Score)
+          if(type(metric_info)==list):
+            metric_fcn=metric_info[0]
+            kwargs=metric_info[1]
+            metrics[metric_name]+=metric_fcn(labels_pred,labels,**kwargs)
+          #Metric without optional parameters (eg. Balanced Accuracy)
+          else:
+            metric_fcn=metric_info
+            metrics[metric_name]+=metric_fcn(labels_pred,labels)
+
       return metrics
 
   def evaluate_set(self,metrics,metrics_dict):
@@ -86,7 +89,7 @@ class Trainer(object):
     for iterations,batch in enumerate(self.valid_loader):
       labels_pred,labels=self.inference(batch)
       self._get_metrics(labels_pred,labels,actual_metrics,metrics_dict)
-    
+
     #mean validation metrics
     for metric in actual_metrics.keys():
       actual_metrics[metric]=actual_metrics[metric]/iterations

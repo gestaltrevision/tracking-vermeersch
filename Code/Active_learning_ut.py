@@ -116,9 +116,10 @@ class VideoOracle(VideoClip):
 
 
 # if __name__ == "__main__":
-#     #test oracle
+    #test oracle
 # table_path="C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\AnnotatedData\\Accelerometer_Data\\Datasets\\acc_dataset_test.csv"
 # main_dir="C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM"
+
 # oracle_test=VideoOracle(table_path,50,main_dir)
 
 #     print(oracle_test)
