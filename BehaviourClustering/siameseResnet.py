@@ -36,7 +36,7 @@ def _tsresnet(arch, block, layers, pretrained,models_dir, **kwargs):
     return model
 
 
-def tsresnet_shallow(pretrained=False,models_dir="", **kwargs):
+def tsresnet_shallow_siamese(pretrained=False,models_dir="", **kwargs):
     r"""
     Args:
         pretrained (bool): If True, returns a model pre-trained on HAR dataset 

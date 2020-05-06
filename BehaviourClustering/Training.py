@@ -166,3 +166,29 @@ class Trainer(object):
     return True
 
 
+class TrainerSiamese(Trainer):
+
+  def __init__(self,model,criterion,opt_parameters,data_loaders,prepare_batch,threshold):
+    super(TrainerSiamese,self).__init__(model,criterion,opt_parameters,data_loaders,prepare_batch)
+    self.threshold=threshold
+      
+  def _scores_to_preds(self,scores):
+    y_pred=np.empty(len(scores))
+    cond=(scores < self.threshold)
+    y_pred[cond]=0
+    y_pred[~cond]=1
+    return y_pred
+
+  def _prob_to_predictions(self,preds,labels):
+    """"From model outputs (Unnormalized probabilities,Tensors) 
+        to predictions(Classes,np.array)"""
+
+    similarity_scores = F.pairwise_distance(*preds).to("cpu").numpy().astype(np.float32)
+
+    labels_pred=self._scores_to_preds(similarity_scores)
+
+    # labels_pred=labels_pred.to("cpu").numpy().astype(np.int32)
+    
+    labels=labels.to("cpu").numpy().astype(np.int32)
+
+    return labels_pred,labels

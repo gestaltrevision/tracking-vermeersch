@@ -1,6 +1,7 @@
 {
     "version": "0.2.0",
     "configurations": [
+
         {
             "name": " Create Dataset script",
             "type": "python",
@@ -42,6 +43,13 @@
             "program": "${workspaceRoot}/siameseResnet.py",
             "console": "integratedTerminal"
 
+        },
+        {
+            "name": "Python: Archivo actual",
+            "type": "python",
+            "request": "launch",
+            "program": "${file}",
+            "console": "integratedTerminal"
         }
     ]
 }

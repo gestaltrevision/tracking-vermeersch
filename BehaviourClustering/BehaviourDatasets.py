@@ -42,8 +42,12 @@ class TSDataset(Dataset):
         self.targets=np.load(os.path.join(self.data_folder,"targets.npy"))
         self.data=np.load(os.path.join(self.data_folder,"data.npy"))
 
-        #Level selector
-        self.level_selector=LevelSelector(level=level)
+        if(level is not None):
+            #Level selector
+            self.level_selector=LevelSelector(level=level)
+            #filter levels
+            self.targets=self.level_selector.transform(self.targets)
+
         #select components...
         self.data_types=data_types
         self.data=self._select_components()
@@ -51,16 +55,12 @@ class TSDataset(Dataset):
         samples,sequence_length,n_components=self.data.shape
         self.data=self.data.reshape(-1,n_components)
         
-        #filter levels
-        self.targets=self.level_selector.transform(self.targets)
-
         #Scalling/Encoding
         if(set_cat=="Train"):
           #scaler
           self.scaler=scaler.fit(self.data)
           #save scaler (in dataset folder)
           joblib.dump(self.scaler,os.path.join(folder,'scaler_train.pkl'))
-       
           #encoder
           self.encoder=LabelEncoder().fit(self.targets)
           joblib.dump(self.encoder,os.path.join(folder,'encoder_train.pkl'))
@@ -74,7 +74,8 @@ class TSDataset(Dataset):
 
         #Data Filtering and Scaling
         self.data=self.scaler.transform(self.data).reshape(samples,sequence_length,n_components)
-        self.data=self.data[self.level_selector.valid_idx]
+            if(level is not None):
+                self.data=self.data[self.level_selector.valid_idx]
 
         #Label encoding...
         self.targets=self.encoder.transform(self.targets)
@@ -131,8 +132,10 @@ class TSDatasetSiamese(TSDataset):
             label_1=self.targets[idx]
             #get random instance with label==label_1
             ind_g = np.squeeze(np.argwhere(self.targets == label_1)) #genuine indexes
-            ts2 = self.data[int(np.random.choice(ind_g, 1))]
-
+            ind_g=int(np.random.choice(ind_g, 1))
+            ts2 = self.data[ind_g]
+            #debug..
+            label_2=self.targets[ind_g]
 
         # get sample from different class
         else:
@@ -144,13 +147,16 @@ class TSDatasetSiamese(TSDataset):
             label_1=self.targets[idx]
             ind_d = np.squeeze(np.argwhere(self.targets != label_1)) #impostor indexes
             #get random instance with label!=label_1
-            ts2 = self.data[int(np.random.choice(ind_d, 1))]
+            ind_d=int(np.random.choice(ind_d, 1))
+            ts2 = self.data[ind_d]
+            #debug 
+            label_2=self.targets[ind_d]
        
         # if self.transform:
         #     ts1 = self.transform(ts1)
         #     ts2 = self.transform(ts2)
 
-        return ts1, ts2, torch.from_numpy(np.array([label], dtype=np.float32))
+        return ts1, ts2, torch.from_numpy(np.array([label], dtype=np.float32)),label_1,label_2
 
 if __name__ == "__main__":
     scaler=RobustScaler()
@@ -181,3 +187,5 @@ if __name__ == "__main__":
     print(samples1.shape)
     print(" ")
     pass
+
+

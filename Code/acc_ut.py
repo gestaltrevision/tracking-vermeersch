@@ -118,7 +118,7 @@ def segment_signal(data,new_samples_number,window_size):
 
 class state_gen:
     """"""
-    def __init__(self,pattern_start,pattern_stop,null_state="Null"):
+    def __init__(self,pattern_start,pattern_stop,null_state="AG Null"):
         self.previous = null_state
         self.null_state=null_state
         self.pattern_start=pattern_start
