@@ -1,9 +1,17 @@
+import os
+from itertools import cycle
+
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import confusion_matrix
 import torch
+import torch.nn.functional as F
+from numpy import interp
+from sklearn.metrics import auc, confusion_matrix, roc_auc_score, roc_curve
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import label_binarize
+
 from Training import Trainer
-import os 
+
 
 def plot_confusion_matrix(cm, classes,
                           exp_path,
@@ -41,12 +49,12 @@ def plot_confusion_matrix(cm, classes,
     plt.xticks(tick_marks, classes, rotation=75)
     plt.yticks(tick_marks, classes)
 
-    # fmt = '.2f' if normalize else 'd'
-    # thresh = cm.max() / 2.
-    # for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
-    #     plt.text(j, i, format(cm[i, j], fmt),
-    #              horizontalalignment="center",
-    #              color="white" if cm[i, j] > thresh else "black")
+    fmt = '.2f' if normalize else 'd'
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, format(cm[i, j], fmt),
+                 horizontalalignment="center",
+                 color="white" if cm[i, j] > thresh else "black")
 
     plt.ylabel('True label')
     plt.xlabel('Predicted label')
@@ -56,19 +64,8 @@ def plot_confusion_matrix(cm, classes,
     if save:
         plt.savefig(os.path.join(exp_path,fig_file))
 
-import torch.nn.functional as F
 
-import numpy as np
-import matplotlib.pyplot as plt
-from itertools import cycle
 
-from sklearn import svm, datasets
-from sklearn.metrics import roc_curve, auc
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import label_binarize
-from sklearn.multiclass import OneVsRestClassifier
-from numpy import interp
-from sklearn.metrics import roc_auc_score
 
 class Evaluator(Trainer):
 
@@ -209,60 +206,61 @@ class Evaluator(Trainer):
       plt.legend(loc="lower right")
       plt.show()
 
-if __name__ == "__main__":
-    from TSResNet import tsresnet_shallow,tsresnet18,tsresnet34
-    from batch_preprocessing import prepare_batch_siamese_cnn,prepare_batch_cnn,prepare_batch_rnn
-    import os 
-    # import pandas as pd
-    import numpy as np
-    import torch
-    import torch.nn as nn
-    import torch.nn.functional as F
+#Debugging
+# if __name__ == "__main__":
+#     from TSResNet import tsresnet_shallow,tsresnet18,tsresnet34
+#     from batch_preprocessing import prepare_batch_siamese_cnn,prepare_batch_cnn,prepare_batch_rnn
+#     import os 
+#     # import pandas as pd
+#     import numpy as np
+#     import torch
+#     import torch.nn as nn
+#     import torch.nn.functional as F
 
-    from torch.utils.data import Dataset,DataLoader
-    from sklearn.model_selection import train_test_split,cross_val_score,cross_validate
-    from BehaviourDatasets import TSDataset,TSDatasetSiamese
-    import joblib
-    from sklearn.preprocessing import OneHotEncoder,LabelEncoder
+#     from torch.utils.data import Dataset,DataLoader
+#     from sklearn.model_selection import train_test_split,cross_val_score,cross_validate
+#     from BehaviourDatasets import TSDataset,TSDatasetSiamese
+#     import joblib
+#     from sklearn.preprocessing import OneHotEncoder,LabelEncoder
 
-    from sklearn.preprocessing import RobustScaler,StandardScaler
-    # from torch.utils.tensorboard import SummaryWriter
-    from sklearn.metrics import balanced_accuracy_score,f1_score,precision_score,matthews_corrcoef,confusion_matrix
+#     from sklearn.preprocessing import RobustScaler,StandardScaler
+#     # from torch.utils.tensorboard import SummaryWriter
+#     from sklearn.metrics import balanced_accuracy_score,f1_score,precision_score,matthews_corrcoef,confusion_matrix
     
-    scaler=StandardScaler()
-    encoder=LabelEncoder
-    folder=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Datasets\HAR_Dataset_RO" #Dataset Random Oversampling
+#     scaler=StandardScaler()
+#     encoder=LabelEncoder
+#     folder=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Datasets\HAR_Dataset_RO" #Dataset Random Oversampling
 
-    data_types=[True,True,True] #select all components
-    level="AG"
-    n_components=9
-    batch_size=128
-    #creating train and valid datasets
-    train_dataset= TSDataset(folder,scaler,"Train",level,data_types)
-    validation_dataset= TSDataset(folder,scaler,"Val",level,data_types)
+#     data_types=[True,True,True] #select all components
+#     level="AG"
+#     n_components=9
+#     batch_size=128
+#     #creating train and valid datasets
+#     train_dataset= TSDataset(folder,scaler,"Train",level,data_types)
+#     validation_dataset= TSDataset(folder,scaler,"Val",level,data_types)
 
-    train_loader = DataLoader(train_dataset, batch_size=batch_size,shuffle=True)
-    val_loader= DataLoader(validation_dataset, batch_size=batch_size,shuffle=True)
-    data_loaders=[train_loader,val_loader]
+#     train_loader = DataLoader(train_dataset, batch_size=batch_size,shuffle=True)
+#     val_loader= DataLoader(validation_dataset, batch_size=batch_size,shuffle=True)
+#     data_loaders=[train_loader,val_loader]
 
 
-    exp_path=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\tracking-vermeersch\BehaviourClustering\run\Baseline_Resnet_RO_AG"
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+#     exp_path=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\tracking-vermeersch\BehaviourClustering\run\Baseline_Resnet_RO_AG"
+#     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    checkpoint_path=os.path.join(exp_path,"checkpoint.pth")
-    num_classes=train_dataset.num_classes
-    model_arch=tsresnet_shallow
-    model_params={"num_classes":num_classes,"n_components":n_components}
-    model =model_arch(**model_params)
-    model.load_state_dict(torch.load(checkpoint_path,map_location=torch.device('cpu')))
-    model=model.to(device)
-    # Loss and optimizer
-    criterion = nn.CrossEntropyLoss()
+#     checkpoint_path=os.path.join(exp_path,"checkpoint.pth")
+#     num_classes=train_dataset.num_classes
+#     model_arch=tsresnet_shallow
+#     model_params={"num_classes":num_classes,"n_components":n_components}
+#     model =model_arch(**model_params)
+#     model.load_state_dict(torch.load(checkpoint_path,map_location=torch.device('cpu')))
+#     model=model.to(device)
+#     # Loss and optimizer
+#     criterion = nn.CrossEntropyLoss()
 
-    prepare_batch_fcn=prepare_batch_cnn
-    ratios=np.array(train_dataset.get_class_ratios())
-    evaluator_val=Evaluator(model,criterion,validation_dataset,val_loader,prepare_batch_fcn ,exp_path,ratios) #val set
-    evaluator_train=Evaluator(model,criterion,train_dataset,train_loader,prepare_batch_fcn,exp_path,ratios) #val set
+#     prepare_batch_fcn=prepare_batch_cnn
+#     ratios=np.array(train_dataset.get_class_ratios())
+#     evaluator_val=Evaluator(model,criterion,validation_dataset,val_loader,prepare_batch_fcn ,exp_path,ratios) #val set
+#     evaluator_train=Evaluator(model,criterion,train_dataset,train_loader,prepare_batch_fcn,exp_path,ratios) #val set
 
-    evaluator_train.plot_roc_curves()
-    pass
+#     evaluator_train.plot_roc_curves()
+#     pass
