@@ -74,8 +74,8 @@ class TSDataset(Dataset):
 
         #Data Filtering and Scaling
         self.data=self.scaler.transform(self.data).reshape(samples,sequence_length,n_components)
-            if(level is not None):
-                self.data=self.data[self.level_selector.valid_idx]
+        if(level is not None):
+            self.data=self.data[self.level_selector.valid_idx]
 
         #Label encoding...
         self.targets=self.encoder.transform(self.targets)
@@ -103,6 +103,14 @@ class TSDataset(Dataset):
         idx_selected=list(idx_selected)
         
         return self.data[:,:,idx_selected]
+    
+    def get_class_ratios(self):
+        total=len(self.targets) #total instances in dataset
+
+        ratios=[len(self.targets[self.targets==label]) /total
+                for label in  range(self.num_classes)]
+
+        return np.array(ratios,dtype=np.float32)
 
 import random
 

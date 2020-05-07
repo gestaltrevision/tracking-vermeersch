@@ -2,16 +2,16 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tqdm.notebook import tqdm
+# from tqdm.notebook import tqdm
 
 from pytorchtools import plot_grad_flow
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 class Trainer(object):
 
-  def __init__(self,model,criterion,opt_parameters,data_loaders,prepare_batch):
+  def __init__(self,model,criterion,opt_parameters,data_loaders,prepare_batch,ratios):
     self.device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     self.model=model.to(self.device)
     self.criterion=criterion
@@ -21,6 +21,7 @@ class Trainer(object):
                             **opt_parameters
     )
     self.prepare_batch=prepare_batch
+    self.ratios=torch.from_numpy(ratios).to(self.device)
 
   def init_metrics(self,metrics_dict):
     #init metrics
