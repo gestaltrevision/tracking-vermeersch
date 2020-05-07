@@ -2,10 +2,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# from tqdm.notebook import tqdm
+from tqdm.notebook import tqdm
 
 from pytorchtools import plot_grad_flow
-# from torch.utils.tensorboard import SummaryWriter
+from torch.utils.tensorboard import SummaryWriter
 
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 

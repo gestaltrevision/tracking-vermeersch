@@ -120,7 +120,7 @@ class Evaluator(Trainer):
         for batch in self.data_loader:
             preds,labels=self.inference(batch)
 
-            scores=self._normalize_probabilities(preds).to("cpu").numpy().astype(np.int32)
+            scores=self._normalize_probabilities(preds).to("cpu").numpy().astype(np.float32)
             #from torch tensors to numpy arrays
             labels=labels.to("cpu").numpy().astype(np.int32)
             #from integer encodings to binary encodings
@@ -194,10 +194,11 @@ class Evaluator(Trainer):
               color='navy', linestyle=':', linewidth=4)
 
       colors = cycle(['aqua', 'darkorange', 'cornflowerblue'])
+
       for i, color in zip(range(self.n_classes), colors):
           plt.plot(fpr[i], tpr[i], color=color, lw=lw,
                   label='ROC curve of class {0} (area = {1:0.2f})'
-                  ''.format(i, roc_auc[i]))
+                  ''.format(self.dataset.classes[i], roc_auc[i]))
 
       plt.plot([0, 1], [0, 1], 'k--', lw=lw)
       plt.xlim([0.0, 1.0])
@@ -264,6 +265,4 @@ if __name__ == "__main__":
     evaluator_train=Evaluator(model,criterion,train_dataset,train_loader,prepare_batch_fcn,exp_path,ratios) #val set
 
     evaluator_train.plot_roc_curves()
-
-    print("HI")
     pass
