@@ -5,7 +5,6 @@ import torch.nn.functional as F
 from tqdm.notebook import tqdm
 
 from torch.utils.tensorboard import SummaryWriter
-
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 class LossTracker:
@@ -50,7 +49,8 @@ class Trainer(object):
                 prepare_batch,
                 device=None,
                 metrics_dict=None,
-                loss_weights = None):
+                loss_weights = None,
+                lr_schedulers = None):
                 
         self.models = models
         self.loss_fcns = loss_fcns
@@ -61,9 +61,11 @@ class Trainer(object):
         self.loss_names = loss_names
         self.loss_weights = loss_weights
         self.metrics_dict = metrics_dict
+        self.lr_schedulers = lr_schedulers
+        self.initialize_device()
         self.initialize_loss_weights()
         self.initialize_loss_tracker()
-        self.initialize_device()
+        self.initialize_lr_schedulers()
         
     def initialize_loss_tracker(self):
         self.loss_tracker = LossTracker(self.loss_names)
@@ -76,6 +78,10 @@ class Trainer(object):
     def initialize_loss_weights(self):
         if self.loss_weights is None:
             self.loss_weights = {k: 1 for k in self.loss_names}
+
+    def initialize_lr_schedulers(self):
+        if self.lr_schedulers is None:
+            self.lr_schedulers = {}
 
     def init_metrics(self):
         #init metrics
@@ -98,13 +104,14 @@ class Trainer(object):
         for v in self.optimizers.values():
             v.zero_grad()
 
+    def create_log_str(self,metrics_dict,log_interval):
+        return ["{} = {} ".format(metric,metrics_dict[metric]/log_interval)
+                                                        for metric in metrics_dict.keys()]
     def log_metrics(self,metrics_train,metrics_eval,epoch,i,log_interval):
-        #Outputing results
-        for cat,metrics in zip(["Train","Test"],[metrics_train,metrics_eval]):
-            log_str=["{} = {} ".format(key,metrics[key]/log_interval)
-                                                        for key in metrics.keys()]
+        #Printing results
+        for cat,metrics_dict in zip(["Train","Test"],[metrics_train,metrics_eval]):
+            log_str = self.create_log_str(metrics_dict,log_interval)
         print(f"{cat} results"+",".join(log_str))
-
         print("-" * 10)
         #Logging results into TensorBoard
         for metric in metrics_train.keys():
@@ -112,7 +119,8 @@ class Trainer(object):
                             {'Train':metrics_train[metric]/log_interval,
                             'Test':metrics_eval[metric]/log_interval},
                             epoch * len(self.train_loader) + i)
-
+        
+      
     def _logit_to_predictions(self,preds,labels):
         """"From model outputs (Unnormalized probabilities,Tensors) 
             to predictions(Classes,np.array)"""
@@ -188,6 +196,12 @@ class Trainer(object):
         for v in self.optimizers.values():
             v.step()
 
+    def step_lr_plateau_schedulers(self, validation_info):
+        if self.lr_schedulers is not None:
+            for k, v in self.lr_schedulers.items():
+                if k.endswith("plateau"):
+                    v.step(validation_info)
+
     def train_batch(self,batch,metrics):
         self.set_to_train()
         self.zero_losses()
@@ -211,23 +225,22 @@ class Trainer(object):
                 metrics_train=self.train_batch(batch,metrics_train)
                 metrics_eval=self.evaluate_set(metrics_eval)        
                 
-            if (i+1) % log_interval == 0:
-                self.log_metrics(metrics_train,metrics_eval,
-                                epoch,i,log_interval)
-                
-                scheduler.step(metrics_eval["total_loss"]/log_interval)
-
-                #Check if we are overfitting 
-                early_stopping(metrics_eval["loss"]/log_interval, 
-                                self.model,
-                                training_path)
-        
-                if early_stopping.early_stop:
-                    print("Early stopping")
-                    return True
-                #reset running metrics
-                metrics_train=self.init_metrics()
-                metrics_eval= self.init_metrics()
+                if (i+1) % log_interval == 0:
+                    self.log_metrics(metrics_train,metrics_eval,
+                                    epoch,i,log_interval)
+                    validation_info = metrics_eval["total_loss"]/log_interval
+                    self.step_lr_plateau_schedulers(validation_info)
+                    #Check if we are overfitting 
+                    early_stopping(validation_info, 
+                                    self.models,
+                                    training_path)
+            
+                    if early_stopping.early_stop:
+                        print("Early stopping")
+                        return True
+                    #reset running metrics
+                    metrics_train=self.init_metrics()
+                    metrics_eval= self.init_metrics()
 
         self.writer.close()
         return True

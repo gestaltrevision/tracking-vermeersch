@@ -110,9 +110,7 @@ class Trainer(object):
     # Backward and optimize
     self.optimizer.zero_grad()
     loss.backward()
-
-    #Gradient Flow to debug
-    # plot_grad_flow(model.named_parameters())
+    
     # Gradient clipping(prevent gradient explotion)
     # torch.nn.utils.clip_grad_norm_(self.model.parameters(), 0.5)
     #Optimizer step
