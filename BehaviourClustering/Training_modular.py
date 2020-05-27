@@ -3,7 +3,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from tqdm.notebook import tqdm
-
+from earlystopping import EarlyStopping
+from pytorchtools import to_numpy
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
@@ -43,7 +44,6 @@ class Trainer(object):
     def __init__(self,
                 models,
                 loss_fcns,
-                loss_names,
                 optimizers,
                 data_loaders,
                 prepare_batch,
@@ -58,7 +58,7 @@ class Trainer(object):
         self.train_loader, self.valid_loader = data_loaders
         self.prepare_batch=prepare_batch
         self.device = device
-        self.loss_names = loss_names
+        self.loss_names = list(self.loss_fcns.keys())
         self.loss_weights = loss_weights
         self.metrics_dict = metrics_dict
         self.lr_schedulers = lr_schedulers
@@ -66,6 +66,7 @@ class Trainer(object):
         self.initialize_loss_weights()
         self.initialize_loss_tracker()
         self.initialize_lr_schedulers()
+        self.initialize_metric_dict()
         
     def initialize_loss_tracker(self):
         self.loss_tracker = LossTracker(self.loss_names)
@@ -79,6 +80,10 @@ class Trainer(object):
         if self.loss_weights is None:
             self.loss_weights = {k: 1 for k in self.loss_names}
 
+    def initialize_metric_dict(self):
+        if self.metrics_dict is None:
+            self.metrics_dict = {}
+
     def initialize_lr_schedulers(self):
         if self.lr_schedulers is None:
             self.lr_schedulers = {}
@@ -86,11 +91,10 @@ class Trainer(object):
     def init_metrics(self):
         #init metrics
         metrics={}
-        if(type(self.metrics_dict) is dict):
-            for key in self.metrics_dict.keys():
-                metrics[key] = 0
-            for loss in self.losses:
-                metrics[loss] = 0
+        for key in self.metrics_dict.keys():
+            metrics[key] = 0
+        for loss in self.losses:
+            metrics[loss] = 0
 
         return metrics 
 
@@ -111,20 +115,23 @@ class Trainer(object):
         #Printing results
         for cat,metrics_dict in zip(["Train","Test"],[metrics_train,metrics_eval]):
             log_str = self.create_log_str(metrics_dict,log_interval)
-        print(f"{cat} results"+",".join(log_str))
+            print(f"{cat} results "+",".join(log_str) )
         print("-" * 10)
+
         #Logging results into TensorBoard
         for metric in metrics_train.keys():
             self.writer.add_scalars(metric,
                             {'Train':metrics_train[metric]/log_interval,
                             'Test':metrics_eval[metric]/log_interval},
                             epoch * len(self.train_loader) + i)
+
+    def _logit_to_probabilies(self,logits):
+        return F.softmax(logits,dim=1)
         
-      
-    def _logit_to_predictions(self,preds,labels):
+    def _logits_to_predictions(self,logits,labels):
         """"From model outputs (Unnormalized probabilities,Tensors) 
             to predictions(Classes,np.array)"""
-        probabilities=F.softmax(preds,dim=1)
+        probabilities = self._logit_to_probabilies(logits)
         labels_pred=torch.argmax(probabilities,dim=1)
         labels_pred=labels_pred.to("cpu").numpy().astype(np.int32)
         labels=labels.to("cpu").numpy().astype(np.int32)
@@ -132,22 +139,21 @@ class Trainer(object):
 
     def _update_metrics(self,logits,labels,metrics):
         #update losses
-        for loss in self.losses.items():
-            metrics[loss] += self.losses[loss]
+        for loss_name, loss_value in self.losses.items():
+            metrics[loss_name] += to_numpy(loss_value)
         #update metrics 
-        if(type(self.metrics_dict) is dict):
-            #From prob to predictions and from tensor to numpy 
-            labels_pred,labels=self._logit_to_predictions(logits,labels)
-            for metric_name,metric_info in self.metrics_dict.items():
-            #Metric with optional parameters (eg. F1 Score)
-                if(type(metric_info)==list):
-                    metric_fcn=metric_info[0]
-                    kwargs=metric_info[1]
-                    metrics[metric_name] += metric_fcn(labels_pred,labels,**kwargs)
-                #Metric without optional parameters (eg. Balanced Accuracy)
-                else:
-                    metric_fcn=metric_info
-                    metrics[metric_name]+=metric_fcn(labels_pred,labels)
+        #From prob to predictions and from tensor to numpy 
+        labels_pred,labels=self._logits_to_predictions(logits,labels)
+        for metric_name,metric_info in self.metrics_dict.items():
+        #Metric with optional parameters (eg. F1 Score)
+            if(type(metric_info)==list):
+                metric_fcn=metric_info[0]
+                kwargs=metric_info[1]
+                metrics[metric_name] += metric_fcn(labels_pred,labels,**kwargs)
+            #Metric without optional parameters (eg. Balanced Accuracy)
+            else:
+                metric_fcn=metric_info
+                metrics[metric_name]+=metric_fcn(labels_pred,labels)
         return metrics 
 
     def set_to_train(self):
@@ -161,7 +167,7 @@ class Trainer(object):
             v.eval()
 
     def _compute_loss_and_metrics(self, batch, metrics):
-        samples,labels = self.prepare_batch(batch,self.device)
+        samples, labels = self.prepare_batch(batch,self.device)
         embeddings = self.compute_embeddings(samples)
         logits = self.get_logits(embeddings)
         self.losses["classifier_loss"] = self.get_classifier_loss(logits, labels)
@@ -212,9 +218,10 @@ class Trainer(object):
         self.step_optimizers()
         return metrics
 
-    def train(self,num_epochs,training_path,early_stopping,log_interval=10):
+    def train(self,num_epochs,training_path,patience,log_interval=10):
         #Inits
         self.writer = SummaryWriter(training_path)
+        early_stopping = EarlyStopping(patience = patience)
         #Training /Eval Loop
         for epoch in tqdm(range(num_epochs)):
             #Init running metrics(Train/Test)
@@ -257,3 +264,4 @@ class Trainer(object):
             metrics[metric]+= current_eval_metrics[metric]
 
         return metrics
+

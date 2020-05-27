@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import os 
+from pytorchtools import Identity
 """Modification of Pytorch implementation of ResNet architectures to make it suitable 
     for multidimensional timeseries data"""
 def conv3x3(in_planes, out_planes, stride=1, groups=1, dilation=1):
@@ -205,37 +206,40 @@ class TSResNet(nn.Module):
         return self._forward_impl(x)
 
 
-def _tsresnet(arch, block, layers, pretrained,models_dir, **kwargs):
+def _tsresnet(arch, block, layers, pretrained,models_dir,is_trunk, **kwargs):
     model =TSResNet(block, layers, **kwargs)
+    embedding_dim_in = None      
     if pretrained: 
         checkpoint_path=os.path.join(models_dir,arch,"checkpoint.pth")
         model.load_state_dict(torch.load(checkpoint_path))
+    if is_trunk: 
+        embedding_dim_in = model.fc.in_features
+        model.fc = Identity()
+    return model, embedding_dim_in
 
-    return model
 
-
-def tsresnet_shallow(pretrained=False,models_dir="", **kwargs):
+def tsresnet_shallow(pretrained=False,is_trunk = True, models_dir="", **kwargs):
     r"""
     Args:
         pretrained (bool): If True, returns a model pre-trained on HAR dataset 
     """
     return _tsresnet('tsresnet_shallow', BasicBlock, [1,1,1,1], pretrained,
-                        models_dir,**kwargs)
+                        models_dir,is_trunk,**kwargs)
 
-def tsresnet18(pretrained=False,models_dir="", **kwargs):
+def tsresnet18(pretrained=False, is_trunk = True, models_dir="", **kwargs):
     r"""
     Args:
         pretrained (bool): If True, returns a model pre-trained on HAR dataset 
     """
     return _tsresnet('tsresnet18', BasicBlock, [2, 2, 2, 2], pretrained,
-                    models_dir, **kwargs)
+                    models_dir, is_trunk, **kwargs)
 
-def tsresnet34(pretrained=False,models_dir="", **kwargs):
+def tsresnet34(pretrained=False, is_trunk = True, models_dir="", **kwargs):
     r"""
     Args:
         pretrained (bool): If True, returns a model pre-trained on HAR dataset 
     """
     return _tsresnet('tsresnet34', BasicBlock, [3, 4, 6, 3], pretrained,
-                     models_dir , **kwargs)
+                     models_dir , is_trunk, **kwargs)
 
 

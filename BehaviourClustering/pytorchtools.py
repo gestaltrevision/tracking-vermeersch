@@ -28,16 +28,22 @@ def plot_grad_flow(named_parameters):
   plt.xlabel("Layers")
   plt.ylabel("average gradient")
 
-def init_weights(m):
-    if type(m) == nn.LSTM:
-        for name, param in m.named_parameters():
-            if 'weight_ih' in name:
-                torch.nn.init.orthogonal_(param.data)
-            elif 'weight_hh' in name:
-                torch.nn.init.orthogonal_(param.data)
-            elif 'bias' in name:
-                param.data.fill_(0)
-    elif type(m) == nn.Conv1d or type(m) == nn.Linear:
-        torch.nn.init.orthogonal_(m.weight)
-        m.bias.data.fill_(0)
+class Identity(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
 
+    def forward(self, x):
+        return x
+
+
+def is_list_or_tuple(x):
+    return isinstance(x, (list, tuple))
+
+def to_numpy(v):
+    if is_list_or_tuple(v):
+        return np.stack([to_numpy(sub_v) for sub_v in v], axis=1)
+    try:
+        return v.cpu().detach().numpy()
+
+    except AttributeError:
+        return v

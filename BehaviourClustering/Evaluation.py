@@ -10,8 +10,8 @@ from sklearn.metrics import auc, confusion_matrix, roc_auc_score, roc_curve
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import label_binarize
 
-from Training import Trainer
-
+from Training_modular import Trainer
+from pytorchtools import to_numpy
 
 def plot_confusion_matrix(cm, classes,
                           exp_path,
@@ -64,22 +64,25 @@ def plot_confusion_matrix(cm, classes,
     if save:
         plt.savefig(os.path.join(exp_path,fig_file))
 
-
-
-
 class Evaluator(Trainer):
 
-    def __init__(self,model,criterion,dataset,data_loader,prepare_batch,exp_path,ratios):
-        self.device=torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model=model.to(self.device)
-        self.criterion=criterion
+    def __init__(self,
+                models,
+                prepare_batch,
+                dataset,
+                data_loader,
+                exp_path,
+                device=None):
+      
+        self.models = models
+        self.prepare_batch=prepare_batch
+        self.device = device
         self.dataset=dataset
         self.data_loader=data_loader
-        self.prepare_batch=prepare_batch
         self.exp_path=exp_path
         self.n_classes=dataset.num_classes
-        self.ratios=torch.from_numpy(ratios).to(self.device)
-
+        self.initialize_device()
+        # self.ratios=torch.from_numpy(ratios).to(self.device)
 
     def _normalize_probabilities(self,preds):
         """Network outputs (Unnormalized class probabilities)
@@ -87,25 +90,31 @@ class Evaluator(Trainer):
         # preds=preds/self.ratios #thresholding
         return F.softmax(preds,dim=1)
 
-    def _prob_to_predictions(self,preds,labels):
-        """"From model outputs (Unnormalized probabilities,Tensors) 
-            to predictions(Classes,np.array)"""
-        probabilities=self._normalize_probabilities(preds)
+    # def _prob_to_predictions(self,preds,labels):
+    #     """"From model outputs (Unnormalized probabilities,Tensors) 
+    #         to predictions(Classes,np.array)"""
+    #     probabilities=self._normalize_probabilities(preds)
 
-        labels_pred=torch.argmax(probabilities,dim=1)
-        labels_pred=labels_pred.to("cpu").numpy().astype(np.int32)
-        labels=labels.to("cpu").numpy().astype(np.int32)
-        return labels_pred,labels
+    #     labels_pred=torch.argmax(probabilities,dim=1)
+    #     labels_pred=labels_pred.to("cpu").numpy().astype(np.int32)
+    #     labels=labels.to("cpu").numpy().astype(np.int32)
+    #     return labels_pred,labels
+    def inference (self,batch):
+        self.set_to_eval()
+        with torch.no_grad():
+            samples, labels = self.prepare_batch(batch,self.device)
+            embeddings = self.compute_embeddings(samples)
+            logits = self.get_logits(embeddings)
+        return logits, labels
 
     def _get_set_predictions(self):
         true_labels=[]
         predicted_labels=[]
         for batch in self.data_loader:
-            preds,labels=self.inference(batch)
-            labels_pred,labels=self._prob_to_predictions(preds,labels)
+            logits,labels=self.inference(batch)
+            labels_pred,labels=self._logits_to_predictions(logits,labels)
             true_labels.append(labels)
             predicted_labels.append(labels_pred)
-
         true_labels=np.concatenate(true_labels)
         predicted_labels=np.concatenate(predicted_labels)
 
@@ -115,11 +124,11 @@ class Evaluator(Trainer):
         true_labels=[]
         predicted_scores=[]
         for batch in self.data_loader:
-            preds,labels=self.inference(batch)
-
-            scores=self._normalize_probabilities(preds).to("cpu").numpy().astype(np.float32)
+            logits,labels=self.inference(batch)
+            # scores=self._normalize_probabilities(preds).to("cpu").numpy().astype(np.float32)
+            scores = to_numpy(self._normalize_probabilities(logits))
             #from torch tensors to numpy arrays
-            labels=labels.to("cpu").numpy().astype(np.int32)
+            labels = to_numpy(labels)
             #from integer encodings to binary encodings
             labels = label_binarize(labels, classes=range(self.n_classes))
             true_labels.append(labels)
@@ -205,6 +214,7 @@ class Evaluator(Trainer):
       plt.title('Some extension of Receiver operating characteristic to multi-class')
       plt.legend(loc="lower right")
       plt.show()
+
 
 #Debugging
 # if __name__ == "__main__":
