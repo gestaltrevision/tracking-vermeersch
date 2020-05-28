@@ -7,37 +7,7 @@ from earlystopping import EarlyStopping
 from pytorchtools import to_numpy
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-
-class LossTracker:
-    def __init__(self, loss_names):
-        if "total_loss" not in loss_names:
-            loss_names.append("total_loss")
-        self.losses = {key: 0 for key in loss_names}
-        self.loss_weights = {key: 1 for key in loss_names}
-
-    def weight_the_losses(self, exclude_loss=("total_loss")):
-        for k, _ in self.losses.items():
-            if k not in exclude_loss:
-                self.losses[k] *= self.loss_weights[k]
-
-    def get_total_loss(self, exclude_loss=("total_loss")):
-        self.losses["total_loss"] = 0
-        for k, v in self.losses.items():
-            if k not in exclude_loss:
-                self.losses["total_loss"] += v
-
-    def set_loss_weights(self, loss_weight_dict):
-        for k, _ in self.losses.items():
-            if k in loss_weight_dict:
-                w = loss_weight_dict[k]
-            else:
-                w = 1.0
-            self.loss_weights[k] = w
-
-    def update(self, loss_weight_dict):
-        self.set_loss_weights(loss_weight_dict)
-        self.weight_the_losses()
-        self.get_total_loss()
+from Loss_tracker import LossTracker
 
 class Trainer(object):
 
@@ -137,13 +107,13 @@ class Trainer(object):
         labels=labels.to("cpu").numpy().astype(np.int32)
         return labels_pred,labels
 
-    def _update_metrics(self,logits,labels,metrics):
+    def _update_loss_info(self,metrics):
         #update losses
         for loss_name, loss_value in self.losses.items():
             metrics[loss_name] += to_numpy(loss_value)
-        #update metrics 
-        #From prob to predictions and from tensor to numpy 
-        labels_pred,labels=self._logits_to_predictions(logits,labels)
+        return metrics
+
+    def _update_metrics(self,labels,labels_pred,metrics):
         for metric_name,metric_info in self.metrics_dict.items():
         #Metric with optional parameters (eg. F1 Score)
             if(type(metric_info)==list):
@@ -154,6 +124,14 @@ class Trainer(object):
             else:
                 metric_fcn=metric_info
                 metrics[metric_name]+=metric_fcn(labels_pred,labels)
+        return metrics
+
+    def _update_performance_info(self,logits,labels,metrics):
+        metrics = self._update_loss_info(metrics)
+        #update metrics 
+        #From prob to predictions and from tensor to numpy 
+        labels_pred,labels=self._logits_to_predictions(logits,labels)
+        metrics = self._update_metrics(labels,labels_pred,metrics)
         return metrics 
 
     def set_to_train(self):
@@ -172,7 +150,7 @@ class Trainer(object):
         logits = self.get_logits(embeddings)
         self.losses["classifier_loss"] = self.get_classifier_loss(logits, labels)
         self.loss_tracker.update(self.loss_weights)
-        updated_metrics = self._update_metrics(logits,labels,metrics)
+        updated_metrics = self._update_performance_info(logits,labels,metrics)
 
         return updated_metrics
 
@@ -265,3 +243,74 @@ class Trainer(object):
 
         return metrics
 
+
+class Coverage_Trainer(Trainer):
+    def __init__(self,
+                models,
+                loss_fcns,
+                optimizers,
+                data_loaders,
+                prepare_batch,
+                device=None,
+                metrics_dict=None,
+                loss_weights = None,
+                lr_schedulers = None,
+                conf_threshold = 0.8):
+
+        super(Coverage_Trainer,self).__init__(models,
+                                            loss_fcns,
+                                            optimizers,
+                                            data_loaders,
+                                            prepare_batch,
+                                            device,
+                                            metrics_dict,
+                                            loss_weights,
+                                            lr_schedulers)
+
+        self.conf_threshold = conf_threshold
+
+    def init_metrics(self):
+        #init metrics
+        metrics={}
+        for key in self.metrics_dict.keys():
+            metrics[key] = 0
+        for loss in self.losses:
+            metrics[loss] = 0
+        metrics["coverage"] = 0
+
+        return metrics 
+
+
+    def _logits_to_predictions(self,logits,labels):
+        """"From model outputs (Unnormalized probabilities,Tensors) 
+            to predictions(Classes,np.array)"""
+
+        probabilities = self._logit_to_probabilies(logits)
+        #Filtering predicted labels with model confidence below threshold
+        valid_idx = [idx for idx,prob in enumerate(probabilities)
+                        if torch.max(prob) > self.conf_threshold]
+        try:
+            labels_pred = torch.argmax(probabilities[valid_idx],dim=1)
+            labels_pred = labels_pred.to("cpu").numpy().astype(np.int32)
+            labels = labels[valid_idx].to("cpu").numpy().astype(np.int32)
+            coverage = len(valid_idx)/ len(labels)
+
+        except:
+            # Case where there are no samples predicted with enough confidence
+            # Undefined metrics....
+            coverage = 0
+            labels_pred = -1
+            labels = 0
+
+        return labels_pred, labels, coverage
+
+    def _update_coverage_info(self,metrics,coverage):
+        metrics["coverage"]+= coverage
+        return metrics
+
+    def _update_performance_info(self,logits,labels,metrics):
+        metrics = self._update_loss_info(metrics)
+        labels_pred, labels, coverage = self._logits_to_predictions(logits,labels)
+        metrics = self._update_coverage_info(metrics, coverage)
+        metrics = self._update_metrics(labels,labels_pred,metrics)
+        return metrics 
