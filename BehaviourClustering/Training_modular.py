@@ -255,7 +255,7 @@ class Coverage_Trainer(Trainer):
                 metrics_dict=None,
                 loss_weights = None,
                 lr_schedulers = None,
-                conf_threshold = 0.8):
+                conf_thresholds = 0.8):
 
         super(Coverage_Trainer,self).__init__(models,
                                             loss_fcns,
@@ -267,8 +267,10 @@ class Coverage_Trainer(Trainer):
                                             loss_weights,
                                             lr_schedulers)
 
-        self.conf_threshold = conf_threshold
-
+        self.conf_thresholds = conf_thresholds
+    def initialize_conf_thresholds(self):
+        if self.conf_thresholds == None: 
+            self.conf_thresholds = []
     def init_metrics(self):
         #init metrics
         metrics={}
@@ -276,36 +278,36 @@ class Coverage_Trainer(Trainer):
             metrics[key] = 0
         for loss in self.losses:
             metrics[loss] = 0
-        metrics["coverage"] = 0
-
+        for threshold in self.conf_thresholds:
+            metrics["coverage_"+str(threshold)] = 0
         return metrics 
-
+   
+    
+    def compute_coverages (self,probabilities):
+        batch_size = len (probabilities)
+        coverages = []
+        for threshold in self.conf_thresholds:
+            valid_idx = [idx for idx,prob in enumerate(probabilities)
+                            if torch.max(prob) > threshold]
+            probabilities = probabilities[valid_idx]
+            coverages.append(len(valid_idx)/ batch_size) 
+        return coverages
 
     def _logits_to_predictions(self,logits,labels):
         """"From model outputs (Unnormalized probabilities,Tensors) 
             to predictions(Classes,np.array)"""
-
         probabilities = self._logit_to_probabilies(logits)
         #Filtering predicted labels with model confidence below threshold
-        valid_idx = [idx for idx,prob in enumerate(probabilities)
-                        if torch.max(prob) > self.conf_threshold]
-        try:
-            labels_pred = torch.argmax(probabilities[valid_idx],dim=1)
-            labels_pred = labels_pred.to("cpu").numpy().astype(np.int32)
-            labels = labels[valid_idx].to("cpu").numpy().astype(np.int32)
-            coverage = len(valid_idx)/ len(labels)
+        coverages = self.compute_coverages(probabilities)
+        labels_pred = torch.argmax(probabilities,dim=1)
+        labels_pred = to_numpy(labels_pred)
+        labels = to_numpy(labels)
 
-        except:
-            # Case where there are no samples predicted with enough confidence
-            # Undefined metrics....
-            coverage = 0
-            labels_pred = -1
-            labels = 0
+        return labels_pred, labels, coverages
 
-        return labels_pred, labels, coverage
-
-    def _update_coverage_info(self,metrics,coverage):
-        metrics["coverage"]+= coverage
+    def _update_coverage_info(self,metrics,coverages):
+        for threshold,coverage in zip(self.conf_thresholds,coverages):
+            metrics["coverage_"+str(threshold)]+= coverage
         return metrics
 
     def _update_performance_info(self,logits,labels,metrics):
