@@ -2,12 +2,13 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from tqdm.notebook import tqdm
 from earlystopping import EarlyStopping
 from pytorchtools import to_numpy
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from Loss_tracker import LossTracker
+# from tqdm.notebook import tqdm
+from tqdm import tqdm
 
 class Trainer(object):
 
@@ -78,22 +79,22 @@ class Trainer(object):
         for v in self.optimizers.values():
             v.zero_grad()
 
-    def create_log_str(self,metrics_dict,log_interval):
-        return ["{} = {} ".format(metric,metrics_dict[metric]/log_interval)
+    def create_log_str(self,metrics_dict,total_steps):
+        return ["{} = {} ".format(metric,metrics_dict[metric]/total_steps)
                                                         for metric in metrics_dict.keys()]
-    def log_metrics(self,metrics_train,metrics_eval,epoch,i,log_interval):
+    def log_metrics(self,metrics_train,metrics_eval,epoch,total_steps):
         #Printing results
         for cat,metrics_dict in zip(["Train","Test"],[metrics_train,metrics_eval]):
-            log_str = self.create_log_str(metrics_dict,log_interval)
+            log_str = self.create_log_str(metrics_dict,total_steps)
             print(f"{cat} results "+",".join(log_str) )
         print("-" * 10)
 
         #Logging results into TensorBoard
         for metric in metrics_train.keys():
             self.writer.add_scalars(metric,
-                            {'Train':metrics_train[metric]/log_interval,
-                            'Test':metrics_eval[metric]/log_interval},
-                            epoch * len(self.train_loader) + i)
+                            {'Train':metrics_train[metric]/total_steps,
+                            'Test':metrics_eval[metric]/total_steps},
+                            epoch * len(self.train_loader) + total_steps)
 
     def _logit_to_probabilies(self,logits):
         return F.softmax(logits,dim=1)
@@ -196,10 +197,10 @@ class Trainer(object):
         self.step_optimizers()
         return metrics
 
-    def train(self,num_epochs,training_path,patience,log_interval=10):
+    def train(self,num_epochs,training_path,patience,metric_kind ="Mcc"):
         #Inits
         self.writer = SummaryWriter(training_path)
-        early_stopping = EarlyStopping(patience = patience)
+        early_stopping = EarlyStopping(patience = patience,metric_kind = metric_kind)
         #Training /Eval Loop
         for epoch in tqdm(range(num_epochs)):
             #Init running metrics(Train/Test)
@@ -210,25 +211,21 @@ class Trainer(object):
                 metrics_train=self.train_batch(batch,metrics_train)
                 metrics_eval=self.evaluate_set(metrics_eval)        
                 
-                if (i+1) % log_interval == 0:
-                    self.log_metrics(metrics_train,metrics_eval,
-                                    epoch,i,log_interval)
-                    validation_info = metrics_eval["total_loss"]/log_interval
-                    self.step_lr_plateau_schedulers(validation_info)
-                    #Check if we are overfitting 
-                    early_stopping(validation_info, 
-                                    self.models,
-                                    training_path)
-            
-                    if early_stopping.early_stop:
-                        print("Early stopping")
-                        return True
-                    #reset running metrics
-                    metrics_train=self.init_metrics()
-                    metrics_eval= self.init_metrics()
+            self.log_metrics(metrics_train,metrics_eval,
+                            epoch,i)
 
+            validation_info = metrics_eval["total_loss"]/i
+            self.step_lr_plateau_schedulers(validation_info)
+            #Check if we are overfitting 
+            early_stopping(metrics_eval[metric_kind]/i,
+                            self.models,
+                            training_path)
+    
+            if early_stopping.early_stop:
+                print("Early stopping")
+                break
+                    
         self.writer.close()
-        return True
 
     def evaluate_set(self,metrics):
         current_eval_metrics=self.init_metrics()

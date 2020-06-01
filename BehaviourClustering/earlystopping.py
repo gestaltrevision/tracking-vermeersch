@@ -3,11 +3,12 @@ import torch
 import os
 class EarlyStopping:
     """Early stops the training if validation loss doesn't improve after a given patience."""
-    def __init__(self, patience=7, verbose=False, delta=0):
+    def __init__(self, patience=7,metric_kind ="MCC", verbose=False, delta=0):
         """
         Args:
             patience (int): How long to wait after last time validation loss improved.
                             Default: 7
+            metric_kind(str): ...
             verbose (bool): If True, prints a message for each validation loss improvement. 
                             Default: False
             delta (float): Minimum change in the monitored quantity to qualify as an improvement.
@@ -18,16 +19,20 @@ class EarlyStopping:
         self.counter = 0
         self.best_score = None
         self.early_stop = False
-        self.val_loss_min = np.Inf
+        self.metric_kind = metric_kind
+        self.metric_value_min = np.Inf
         self.delta = delta
 
-    def __call__(self, val_loss, models,training_path):
+    def _scale_metric(self,metric_value):
+        return -metric_value if("loss" in self.metric_kind) else metric_value
 
-        score = -val_loss
+    def __call__(self, metric_value, models,training_path):
 
+        score = self._scale_metric(metric_value)
+        
         if self.best_score is None:
             self.best_score = score
-            self.save_checkpoint(val_loss, models,training_path)
+            self.save_checkpoint(metric_value, models,training_path)
 
         elif score < self.best_score + self.delta:
             self.counter += 1
@@ -36,17 +41,17 @@ class EarlyStopping:
                 self.early_stop = True
         else:
             self.best_score = score
-            self.save_checkpoint(val_loss, models, training_path)
+            self.save_checkpoint(metric_value, models, training_path)
             self.counter = 0
 
-    def save_checkpoint(self, val_loss, models ,training_path):
-        '''Saves model when validation loss decrease.'''
+    def save_checkpoint(self, metric_value, models ,training_path):
+        '''Saves model when metric improves.'''
         if self.verbose:
             print(f'Validation loss decreased \
-                    ({self.val_loss_min:.6f}  --> {val_loss:.6f}).\
+                    ({self.metric_value_min:.6f}  --> {metric_value:.6f}).\
                     Saving model ...')
             
         for model_name, model in models.items():
             checkpoint_path = os.path.join(training_path, f"checkpoint_{model_name}.pth")
             torch.save(model.state_dict(), checkpoint_path)
-        self.val_loss_min = val_loss
+        self.metric_value_min = metric_value
