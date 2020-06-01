@@ -7,8 +7,8 @@ from pytorchtools import to_numpy
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from Loss_tracker import LossTracker
-# from tqdm.notebook import tqdm
-from tqdm import tqdm
+from tqdm.notebook import tqdm
+# from tqdm import tqdm
 
 class Trainer(object):
 
@@ -265,6 +265,7 @@ class Coverage_Trainer(Trainer):
                                             lr_schedulers)
 
         self.conf_thresholds = conf_thresholds
+
     def initialize_conf_thresholds(self):
         if self.conf_thresholds == None: 
             self.conf_thresholds = []
