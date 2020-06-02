@@ -6,6 +6,7 @@ import torch.nn.functional as F
 
 from Training_modular import Trainer
 from pytorchtools import to_numpy
+from sklearn.metrics import classification_report
 
 class Evaluator(Trainer):
 
@@ -35,7 +36,12 @@ class Evaluator(Trainer):
     def is_defined(self,argument):
         if(getattr(self,argument)==None):
             raise ValueError
-
+    def init_metrics(self):
+        #init metrics
+        metrics={}
+        for key in self.metrics_dict.keys():
+            metrics[key] = 0
+        return metrics 
     def _normalize_probabilities(self,preds):
         """Network outputs (Unnormalized class probabilities)
         to normalized probabilities"""
@@ -48,7 +54,7 @@ class Evaluator(Trainer):
         return valid_idx
 
     def compute_coverage(self,probabilities,conf_thresh):
-        valid_idx = self.get_valid_ids(self,probabilities,conf_thresh)
+        valid_idx = self.get_valid_ids(probabilities,conf_thresh)
         coverage = len(valid_idx)/ len(probabilities)
         return coverage
 
@@ -116,11 +122,8 @@ class Evaluator(Trainer):
         except:
             self._get_set_predictions()
         true_labels_filtered, pred_labels_filtered = self.filter_predictions(conf_thresh)
-        metrics = self.init_metrics()
-        metrics = self._update_metrics(true_labels_filtered,pred_labels_filtered,metrics)
-        return metrics
-
-
+        report = classification_report(true_labels_filtered,pred_labels_filtered)
+        return report
 
 # if __name__ == "__main__":
 #     import os 
@@ -184,14 +187,3 @@ class Evaluator(Trainer):
     # models["classifier"] = load_pretrained_model("classifier", exp_path, classifier_model,
     #                                             device)
 
-
-    evaluator_val = Evaluator(None,
-                            None,
-                            None,
-                            None,
-                            None,
-                            None)
-    logits = torch.rand([10,3]).to(device)
-    labels = torch.rand([10,1]).to(device)
-    evaluator_val._logits_to_predictions(logits,labels)
-    pass

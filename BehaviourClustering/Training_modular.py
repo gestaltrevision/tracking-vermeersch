@@ -8,7 +8,6 @@ from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from Loss_tracker import LossTracker
 from tqdm.notebook import tqdm
-# from tqdm import tqdm
 
 class Trainer(object):
 
