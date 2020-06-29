@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from earlystopping import EarlyStopping
-from pytorchtools import to_numpy
+from pytorchtools import to_numpy, set_requires_grad
 from torch.utils.tensorboard import SummaryWriter
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from Loss_tracker import LossTracker
@@ -20,7 +20,8 @@ class Trainer(object):
                 device=None,
                 metrics_dict=None,
                 loss_weights = None,
-                lr_schedulers = None):
+                lr_schedulers = None,
+                freeze_these = ()):
                 
         self.models = models
         self.loss_fcns = loss_fcns
@@ -32,6 +33,7 @@ class Trainer(object):
         self.loss_weights = loss_weights
         self.metrics_dict = metrics_dict
         self.lr_schedulers = lr_schedulers
+        self.freeze_these = freeze_these
         self.initialize_device()
         self.initialize_loss_weights()
         self.initialize_loss_tracker()
@@ -134,11 +136,16 @@ class Trainer(object):
         metrics = self._update_metrics(labels,labels_pred,metrics)
         return metrics 
 
+
     def set_to_train(self):
         trainable = [self.models, self.loss_fcns]
         for T in trainable:
-            for _, v in T.items():
-                v.train()
+            for k, v in T.items():
+                if k in self.freeze_these:
+                    set_requires_grad(v, requires_grad=False)
+                    v.eval()
+                else:
+                    v.train()
 
     def set_to_eval(self):
         for _, v in self.models.items():
@@ -213,7 +220,7 @@ class Trainer(object):
             self.log_metrics(metrics_train,metrics_eval,
                             epoch,i)
 
-            validation_info = metrics_eval["total_loss"]/i
+            validation_info = metrics_train["total_loss"]/i
             self.step_lr_plateau_schedulers(validation_info)
             #Check if we are overfitting 
             early_stopping(metrics_eval[metric_kind]/i,
@@ -240,76 +247,3 @@ class Trainer(object):
         return metrics
 
 
-class Coverage_Trainer(Trainer):
-    def __init__(self,
-                models,
-                loss_fcns,
-                optimizers,
-                data_loaders,
-                prepare_batch,
-                device=None,
-                metrics_dict=None,
-                loss_weights = None,
-                lr_schedulers = None,
-                conf_thresholds = 0.8):
-
-        super(Coverage_Trainer,self).__init__(models,
-                                            loss_fcns,
-                                            optimizers,
-                                            data_loaders,
-                                            prepare_batch,
-                                            device,
-                                            metrics_dict,
-                                            loss_weights,
-                                            lr_schedulers)
-
-        self.conf_thresholds = conf_thresholds
-
-    def initialize_conf_thresholds(self):
-        if self.conf_thresholds == None: 
-            self.conf_thresholds = []
-    def init_metrics(self):
-        #init metrics
-        metrics={}
-        for key in self.metrics_dict.keys():
-            metrics[key] = 0
-        for loss in self.losses:
-            metrics[loss] = 0
-        for threshold in self.conf_thresholds:
-            metrics["coverage_"+str(threshold)] = 0
-        return metrics 
-   
-    
-    def compute_coverages (self,probabilities):
-        batch_size = len (probabilities)
-        coverages = []
-        for threshold in self.conf_thresholds:
-            valid_idx = [idx for idx,prob in enumerate(probabilities)
-                            if torch.max(prob) > threshold]
-            probabilities = probabilities[valid_idx]
-            coverages.append(len(valid_idx)/ batch_size) 
-        return coverages
-
-    def _logits_to_predictions(self,logits,labels):
-        """"From model outputs (Unnormalized probabilities,Tensors) 
-            to predictions(Classes,np.array)"""
-        probabilities = self._logit_to_probabilies(logits)
-        #Filtering predicted labels with model confidence below threshold
-        coverages = self.compute_coverages(probabilities)
-        labels_pred = torch.argmax(probabilities,dim=1)
-        labels_pred = to_numpy(labels_pred)
-        labels = to_numpy(labels)
-
-        return labels_pred, labels, coverages
-
-    def _update_coverage_info(self,metrics,coverages):
-        for threshold,coverage in zip(self.conf_thresholds,coverages):
-            metrics["coverage_"+str(threshold)]+= coverage
-        return metrics
-
-    def _update_performance_info(self,logits,labels,metrics):
-        metrics = self._update_loss_info(metrics)
-        labels_pred, labels, coverage = self._logits_to_predictions(logits,labels)
-        metrics = self._update_coverage_info(metrics, coverage)
-        metrics = self._update_metrics(labels,labels_pred,metrics)
-        return metrics 

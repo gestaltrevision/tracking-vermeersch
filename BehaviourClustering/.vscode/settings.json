@@ -1,5 +1,4 @@
 {
-    "python.pythonPath": "C:\\Users\\jeuux\\Anaconda2\\envs\\pytorch_env\\python.exe",
     "python.linting.pylintEnabled": true,
     "python.linting.pycodestyleEnabled": false,
     "python.linting.enabled": true,

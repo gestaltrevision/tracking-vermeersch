@@ -29,7 +29,7 @@ class LevelSelector( BaseEstimator, TransformerMixin):
     def fit(self,y):
         return self 
     
-    def transform( self, y ):
+    def transform(self, y):
         #filter behaviours
         self.valid_idx= self._get_valid_idx(y)
         y = y[self.valid_idx]

@@ -7,7 +7,7 @@ import torch.nn.functional as F
 from Training_modular import Trainer
 from pytorchtools import to_numpy
 from sklearn.metrics import classification_report
-
+from tqdm import tqdm
 class Evaluator(Trainer):
 
     def __init__(self,
@@ -16,6 +16,7 @@ class Evaluator(Trainer):
                 dataset,
                 data_loader,
                 exp_path,
+                temperature = None,
                 device=None,
                 metrics_dict= None):
                 
@@ -27,21 +28,25 @@ class Evaluator(Trainer):
         self.exp_path=exp_path
         self.n_classes=dataset.num_classes
         self.metrics_dict = metrics_dict
+        self.temperature = temperature
         self.true_labels = None
         self.predicted_best_probabilities = None
         self.predicted_labels = None
+        self.predicted_probabilities = None
         self.initialize_device()
         self.initialize_metric_dict()
 
     def is_defined(self,argument):
         if(getattr(self,argument)==None):
             raise ValueError
+
     def init_metrics(self):
         #init metrics
         metrics={}
         for key in self.metrics_dict.keys():
             metrics[key] = 0
         return metrics 
+
     def _normalize_probabilities(self,preds):
         """Network outputs (Unnormalized class probabilities)
         to normalized probabilities"""
@@ -58,18 +63,43 @@ class Evaluator(Trainer):
         coverage = len(valid_idx)/ len(probabilities)
         return coverage
 
+    def get_best_probabilities(self,probabilities,labels_pred):
+      best_probabilities = [probabilities[batch_id,best_class]
+                                  for batch_id,best_class in enumerate(labels_pred)]
+      return best_probabilities
+    
+    def temperature_scale(self, logits):
+        """
+        Perform temperature scaling on logits
+        """
+        # Expand temperature to match the size of logits
+        temperature = self.temperature.unsqueeze(1).expand(logits.size(0), logits.size(1))
+        return logits / temperature
+
+    def get_logits(self,embeddings):
+        """Return logits of model 
+        If model has been calibrated, then scale the computed logits
+        using Temperature scaling previously computed
+        """
+        logits  = self.models["classifier"](embeddings)
+        try:
+          # Scale logits using temperature scaling
+          self.is_defined("temperature")
+          logits = self.temperature_scale(logits)
+          return logits
+        except:
+          return logits
+            
     def _logits_to_predictions(self,logits,labels):
         """"From model outputs (Unnormalized probabilities,Tensors) 
             to predictions(Classes,np.array)"""
         probabilities = self._logit_to_probabilies(logits)
         #Filtering predicted labels with model confidence below threshold
         labels_pred = torch.argmax(probabilities,dim=1)
-        best_probabilities = [to_numpy(probabilities[batch_id,best_class])
-                                     for batch_id,best_class in enumerate(labels_pred)]
-
         labels_pred = to_numpy(labels_pred)
         labels = to_numpy(labels)
-        return best_probabilities, labels_pred, labels
+        probabilities = to_numpy(probabilities)
+        return probabilities, labels_pred, labels
 
     def inference (self,batch):
         self.set_to_eval()
@@ -82,19 +112,42 @@ class Evaluator(Trainer):
     def _get_set_predictions(self):
         true_labels=[]
         predicted_labels=[]
+        predicted_probabilities = []
         predicted_best_probabilities = []
 
         for batch in self.data_loader:
             logits,labels = self.inference(batch)
-            best_probabilities, labels_pred, labels = self._logits_to_predictions(logits,labels)
+            probabilities_pred, labels_pred, labels = self._logits_to_predictions(logits,labels)
+            best_probabilities = self.get_best_probabilities(probabilities_pred,labels_pred)
             true_labels.append(labels)
             predicted_labels.append(labels_pred)
+            predicted_probabilities.append(probabilities_pred)
             predicted_best_probabilities.append(best_probabilities)
 
         self.true_labels = np.concatenate(true_labels)
         self.predicted_labels = np.concatenate(predicted_labels)
+        self.predicted_probabilities = np.concatenate(predicted_probabilities)
         self.predicted_best_probabilities = np.concatenate(predicted_best_probabilities)
 
+    def compute_set_embeddings(self):
+        s, e = 0, 0
+        with torch.no_grad():
+            for i, batch in enumerate(tqdm(self.data_loader)):
+                samples, labels = self.prepare_batch(batch,self.device)
+                q = self.compute_embeddings(samples)
+                if labels.dim() == 1:
+                    labels = labels.unsqueeze(1)
+                if i == 0:
+                    all_labels = torch.zeros(len(self.data_loader.dataset), labels.size(1))
+                    all_q = torch.zeros(len(self.data_loader.dataset), q.size(1))
+                e = s + q.size(0)
+                all_q[s:e] = q
+                all_labels[s:e] = labels
+                s = e
+            all_labels = all_labels.cpu().numpy()
+            all_q = all_q.cpu().numpy()
+
+        return all_q, all_labels
 
     def compute_coverage_array(self):
         try:
@@ -107,7 +160,6 @@ class Evaluator(Trainer):
         for idx,conf_thresh in enumerate(conf_thresh_arr): 
             coverage_arr[idx] = self.compute_coverage(self.predicted_best_probabilities,conf_thresh)
         return coverage_arr, conf_thresh_arr
-
 
     def filter_predictions(self,conf_thresh):
         valid_idx = self.get_valid_ids(self.predicted_best_probabilities,conf_thresh)
@@ -124,7 +176,6 @@ class Evaluator(Trainer):
         true_labels_filtered, pred_labels_filtered = self.filter_predictions(conf_thresh)
         report = classification_report(true_labels_filtered,pred_labels_filtered)
         return report
-
 # if __name__ == "__main__":
 #     import os 
 #     import numpy as np

@@ -107,7 +107,7 @@ class Bottleneck(nn.Module):
 
 class TSResNet(nn.Module):
 
-    def __init__(self, block, layers,num_classes,n_components=9, zero_init_residual=False,
+    def __init__(self, block, layers, num_classes,n_components=9, zero_init_residual=False,
                  groups=1, width_per_group=64, replace_stride_with_dilation=None,
                  norm_layer=None):
         super(TSResNet, self).__init__()
@@ -204,7 +204,6 @@ class TSResNet(nn.Module):
 
     def forward(self, x):
         return self._forward_impl(x)
-
 
 def _tsresnet(arch, block, layers, pretrained,models_dir,is_trunk, **kwargs):
     model =TSResNet(block, layers, **kwargs)

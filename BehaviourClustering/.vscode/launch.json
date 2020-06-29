@@ -50,6 +50,18 @@
             "request": "launch",
             "program": "${file}",
             "console": "integratedTerminal"
+        },
+        {
+            "name": " ML Runner",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/metriclearning_run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--experiment_name", "test1", 
+                "--dataset", "{TSDatasetML: {root_folder: C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\AnnotatedData\\Accelerometer_Data\\Datasets\\HAR_Dataset_raw}}",  
+                "--models", "{trunk~OVERRIDE~: {TSResNetML}}"
+            ]
         }
     ]
 }

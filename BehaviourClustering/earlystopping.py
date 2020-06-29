@@ -8,7 +8,7 @@ class EarlyStopping:
         Args:
             patience (int): How long to wait after last time validation loss improved.
                             Default: 7
-            metric_kind(str): ...
+            metric_kind(str): The score used to keep track of the validation performance (eg. Loss, Mcc...)
             verbose (bool): If True, prints a message for each validation loss improvement. 
                             Default: False
             delta (float): Minimum change in the monitored quantity to qualify as an improvement.
@@ -20,7 +20,7 @@ class EarlyStopping:
         self.best_score = None
         self.early_stop = False
         self.metric_kind = metric_kind
-        self.metric_value_min = np.Inf
+        self.metric_value_best = np.Inf
         self.delta = delta
 
     def _scale_metric(self,metric_value):
@@ -47,11 +47,11 @@ class EarlyStopping:
     def save_checkpoint(self, metric_value, models ,training_path):
         '''Saves model when metric improves.'''
         if self.verbose:
-            print(f'Validation loss decreased \
-                    ({self.metric_value_min:.6f}  --> {metric_value:.6f}).\
+            print(f'{self.metric_kind} improved \
+                    ({self.metric_value_best:.6f}  --> {metric_value:.6f}).\
                     Saving model ...')
             
         for model_name, model in models.items():
-            checkpoint_path = os.path.join(training_path, f"checkpoint_{model_name}.pth")
+            checkpoint_path = os.path.join(training_path, f"{model_name}_best.pth")
             torch.save(model.state_dict(), checkpoint_path)
-        self.metric_value_min = metric_value
+        self.metric_value_best = metric_value

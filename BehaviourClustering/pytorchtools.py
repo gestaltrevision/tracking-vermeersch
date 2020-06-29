@@ -27,6 +27,19 @@ def to_numpy(v):
         return v
 
 
+def set_requires_grad(model, requires_grad):
+  for param in model.parameters():
+    param.requires_grad = requires_grad
+    
+def load_pretrained_model(model_name, model_dir, model, device):
+  try:
+    checkpoint_file = next(file for file in os.listdir(model_dir) if (f"{model_name}_best" in file))
+  except:
+    checkpoint_file = next(file for file in os.listdir(model_dir) if (f"{model_name}" in file))
+  checkpoint_path=os.path.join(model_dir,checkpoint_file)
+  model.load_state_dict(torch.load(checkpoint_path))
+  return model.to(device)
+
 def get_samples_from_class(data_loader,label,n_samples = 5):
   #get sample batch
   samples, labels = next(iter(data_loader))
