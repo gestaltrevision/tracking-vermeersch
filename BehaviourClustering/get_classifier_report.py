@@ -11,8 +11,6 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from tqdm.notebook import tqdm
 
 import torch
-import torch.nn as nn
-import torch.nn.functional as F
 import argparse
 from batch_preprocessing import prepare_batch_cnn, prepare_batch_embeddings
 from BehaviourDatasets import TSDataset
@@ -21,28 +19,27 @@ from MLP import MLP
 from pytorchtools import load_pretrained_model
 from torch.utils.data import DataLoader, Dataset
 from TSResNet import tsresnet18, tsresnet_shallow
-import yaml, json
+import yaml, pickle
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--config_path", type=str,
                     help="File with config settings for testing")
 
-
 if __name__ == "__main__":
-    
+
     args=parser.parse_args()
     # load model config
     config_path = args.config_path
     with open(config_path,"rb") as f:
         config = yaml.safe_load(f)
 
-    model_folder = config.model_folder
-    dataset_folder = config.dataset_folder 
-    results_folder  = config.dataset_folder
-    batch_size = config.batch_size
-    trunk_arch  = config.trunk_arch
-    embedding_dim = config.embedding_dim
+    model_folder = config["model_folder"]
+    dataset_folder = config["dataset_folder"]
+    results_folder  = config["results_folder"]
+    batch_size = config["batch_size"]
+    # trunk_arch  = config["trunk_arch"]
+    embedding_dim = config["embedding_dim"]
     #create results folder if its not yet been created
     if not(os.path.isdir(results_folder)):
         os.makedirs(results_folder)
@@ -54,7 +51,6 @@ if __name__ == "__main__":
     level = None
     n_components=9
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    num_classes=train_dataset.num_classes
     prepare_batch_fcn=prepare_batch_cnn
 
     #creating train and valid datasets
@@ -76,6 +72,8 @@ if __name__ == "__main__":
     models={}
     # Set trunk model 
     # trunk_arch=tsresnet18
+    num_classes=train_dataset.num_classes
+    trunk_arch = tsresnet18
     trunk_params={"num_classes":num_classes,"n_components":n_components}
     trunk_model, trunk_output_size  = trunk_arch(**trunk_params)
     trunk_model  = torch.nn.DataParallel(trunk_model)
@@ -122,7 +120,7 @@ if __name__ == "__main__":
             evaluator.plot_class_performance(metrics["Recall_Class"][count],"Recall",count,title= "Class_Recall")
 
         #save results
-        table_file = os.path.join(split_folder,"metrics.json")
-        with open(table_file,"w") as f:
-            json.dump(table_file,metrics)
+        table_file = os.path.join(split_folder,"metrics.pkl")
+        with open(table_file,"wb") as f:
+            pickle.dump(metrics,f)
 
