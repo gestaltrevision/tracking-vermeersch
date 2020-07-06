@@ -31,7 +31,7 @@ parser.add_argument("-np","--n_points", nargs='?', const=50, type=int, default=5
 if __name__ == "__main__":
     # Sample usage :
     #python process_raw_acc.py --data_dir "C:\Users\jeuux\Desktop\Carrera\MoAI\TFM" --data_type CompleteData --base_name Final_data --dataset_name HAR_Dataset
-    #
+
     args=parser.parse_args()
 
     participant_path=os.path.join(args.data_dir,"Participants")

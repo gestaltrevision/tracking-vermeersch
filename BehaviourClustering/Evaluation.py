@@ -25,7 +25,6 @@ class Evaluator(Trainer):
                 prepare_batch,
                 dataset,
                 data_loader,
-                exp_path,
                 results_folder,
                 temperature = None,
                 device=None,
@@ -36,7 +35,6 @@ class Evaluator(Trainer):
         self.device = device
         self.dataset=dataset
         self.data_loader=data_loader
-        self.exp_path=exp_path
         self.n_classes=dataset.num_classes
         self.metrics_dict = metrics_dict
         self.temperature = temperature
@@ -58,6 +56,7 @@ class Evaluator(Trainer):
         metrics={}
         for key in self.metrics_dict.keys():
             metrics[key] = []
+        metrics["coverages"] = []
         return metrics 
     
     def initialize_writer(self,writer_folder):
@@ -211,6 +210,9 @@ class Evaluator(Trainer):
             else:
                 metric_fcn=metric_info
                 metrics[metric_name].append(metric_fcn(true_labels,predicted_labels))
+        #update coverages
+        coverage  = self.compute_coverage(true_labels)
+        metrics["coverages"].append(coverage)
         return metrics
 
     #plotting
