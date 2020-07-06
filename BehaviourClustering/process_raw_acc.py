@@ -11,7 +11,7 @@ from acc_ut import process_readings_participant,segment_signal
 
 parser = argparse.ArgumentParser()
 
-parser.add_argument("--main_dir", type=str,
+parser.add_argument("--data_dir", type=str,
                     help="Base directory of project")
 
 parser.add_argument("--data_type", type=str,
@@ -30,16 +30,17 @@ parser.add_argument("-np","--n_points", nargs='?', const=50, type=int, default=5
 
 if __name__ == "__main__":
     # Sample usage :
-    #python process_raw_acc.py --main_dir "C:\Users\jeuux\Desktop\Carrera\MoAI\TFM" --data_type CompleteData --base_name Final_data --dataset_name HAR_Dataset
+    #python process_raw_acc.py --data_dir "C:\Users\jeuux\Desktop\Carrera\MoAI\TFM" --data_type CompleteData --base_name Final_data --dataset_name HAR_Dataset
     #
     args=parser.parse_args()
-    acc_path=os.path.join(args.main_dir,"AnnotatedData","Accelerometer_Data")
-    participant_path=os.path.join(acc_path,"Participants")
+
+    participant_path=os.path.join(args.data_dir,"Participants")
     participant_folders=[os.path.join(participant_path,folder) for folder in os.listdir(participant_path)]
     new_samples_number=args.n_points
     samples_per_sl=args.n_samples
-    data=[]
-    targets=[]
+    # data=[]
+    # targets=[]
+
     #open raw tables to get raw acc values and participant info
     for participant_folder in tqdm(participant_folders):
         participant=os.path.basename(participant_folder)
@@ -50,8 +51,8 @@ if __name__ == "__main__":
         raw_df=pd.read_csv(file,decimal=',')
         df=process_readings_participant(raw_df,participant,args.n_samples)
         sensor_comp,labels=segment_signal(df,new_samples_number,samples_per_sl)
-        data.append(sensor_comp)
-        targets.append(labels)
+        # data.append(sensor_comp)
+        # targets.append(labels)
         np.save(os.path.join(os.path.dirname(file),'segments_data'), sensor_comp)
         np.save(os.path.join(os.path.dirname(file),'targets_data'), labels)
 
@@ -61,19 +62,16 @@ if __name__ == "__main__":
 
         print("Succesfully raw data  of participant : {} processed".format(participant))
 
-    #save full targets,readings
-    dataset_path=os.path.join(args.main_dir,
-                                "AnnotatedData",
-                                "Accelerometer_Data",
-                                "Datasets",args.dataset_name)
+    # #save full targets,readings
+    # dataset_path=os.path.join(args.data_dir,"Datasets",args.dataset_name)
+                               
+    # if(not(os.path.isdir(dataset_path))):
+    #     os.makedirs(dataset_path)
 
-    if(not(os.path.isdir(dataset_path))):
-        os.makedirs(dataset_path)
-
-    data=np.concatenate(data)
-    np.save(os.path.join(dataset_path,"data"),data)
-    targets=np.concatenate(targets)
-    np.save(os.path.join(dataset_path,"targets"),targets)
+    # data=np.concatenate(data)
+    # np.save(os.path.join(dataset_path,"data"),data)
+    # targets=np.concatenate(targets)
+    # np.save(os.path.join(dataset_path,"targets"),targets)
 
 
 

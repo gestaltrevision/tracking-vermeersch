@@ -21,10 +21,10 @@
             "program": "${workspaceRoot}/process_raw_acc.py",
             "console": "integratedTerminal",
             "args": [
-                "--main_dir","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM",
-                "--data_type","CompleteData" ,
+                "--data_dir","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\AnnotatedData\\FinalDatasets",
+                "--data_type","FullDataset" ,
                 "--base_name", "Final_data",
-                "--dataset_name","HAR_Dataset"
+                "--dataset_name","HAR_Dataset_Final"
 
             ]
         },

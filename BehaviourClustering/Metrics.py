@@ -7,6 +7,8 @@ from sklearn.metrics import auc, confusion_matrix, roc_auc_score, roc_curve
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import label_binarize
 import warnings
+from torch.utils.tensorboard import SummaryWriter
+
 warnings.filterwarnings("ignore")
 import umap
 import matplotlib.pyplot as plt
@@ -18,10 +20,10 @@ class Results_plotter(Evaluator):
     def __init__(self,
                 true_labels,
                 predicted_labels,
-                probabilities_pred,
-                predicted_best_probabilities,
                 results_folder,
                 dataset,
+                probabilities_pred = None,
+                predicted_best_probabilities = None,
                 coverages = None ,
                 conf_thresh_arr = None,
                 embeddings = None):
@@ -29,7 +31,7 @@ class Results_plotter(Evaluator):
         self.true_labels = true_labels
         self.predicted_probabilities = probabilities_pred
         self.predicted_labels = predicted_labels
-        self.scores = predicted_best_probabilities
+        self.scores = probabilities_pred
         self.coverages = coverages
         self.conf_thresh_arr = conf_thresh_arr
         self.results_folder = results_folder
@@ -38,16 +40,32 @@ class Results_plotter(Evaluator):
         self.categorical_labels = self.dataset.classes
         self.n_classes = len(self.categorical_labels)
 
+    def initialize_writer(self,writer_folder):
+      if not os.path.exists(writer_folder):
+          os.makedirs(writer_folder)
+      return SummaryWriter(writer_folder)
+
+    def to_tensorboard(self,base_dir,title,fig,epoch):
+      writer = self.initialize_writer(base_dir)
+      writer.add_figure(tag= title,figure = fig, global_step = epoch)
+
+    def save_fig(self,title,ext,fig,epoch):
+        # Save
+        base_dir  = os.path.join(self.results_folder,title)
+        fig_file= ".".join([title,ext])
+        fig_dir = os.path.join(base_dir,fig_file)
+        plt.savefig(fig_dir)
+        self.to_tensorboard(base_dir,title,fig,epoch)
+        plt.show()
 
     def plot_coverage(self, title = " ",ext="png",save = True):
         plt.plot(self.conf_thresh_arr, self.coverages)
         plt.xlabel("confidence threshold")
         plt.ylabel("coverage")
         plt.title(title)
-        fig_file= ".".join([title,ext])
+
         if save:
-            plt.savefig(os.path.join(self.results_folder,fig_file))
-        plt.show()
+            self.save_fig(title,ext,fig)
 
     def plot_preds_distributions(self,label,title,save = True, ext= "png"):
         idx = np.squeeze(np.argwhere(self.predicted_labels == label))
@@ -59,41 +77,39 @@ class Results_plotter(Evaluator):
         plt.legend()
         plt.title(title)
 
-        fig_file= ".".join([title,ext])
         if save:
-            plt.savefig(os.path.join(self.results_folder,fig_file))
-        plt.show()
+            self.save_fig(title,ext,fig)
 
-    def plt_conf_matrix(self, title = "" , normalize =True, save = True):
-        #Compute confusion matrix
-        cnf_matrix = confusion_matrix(self.true_labels, 
-                                        self.predicted_labels,labels=range(self.n_classes))
-        np.set_printoptions(precision=2)
-
-        # Plot confusion matrix
-        plot_confusion_matrix(cnf_matrix,
-                                self.categorical_labels,
-                                self.results_folder,save,
-                                title=title,
-                                normalize=normalize) 
-
-    def plot_confusion_matrix(self, title="", ext = "png", save = True, normalize = True):
-        cnf_matrix = confusion_matrix(self.true_labels, 
+    def plot_confusion_matrix(self, epoch =0, title="", ext = "png", save = True, normalize = True):
+        try:
+            cnf_matrix = confusion_matrix(self.true_labels, 
                                             self.predicted_labels,labels=range(self.n_classes))
-        if (normalize):
-            cnf_matrix= cnf_matrix.astype('float') / cnf_matrix.sum(axis=1)[:, np.newaxis]
-
+            if (normalize):
+              cnf_matrix= cnf_matrix.astype('float') / cnf_matrix.sum(axis=1)[:, np.newaxis]
+              cnf_matrix  = np.around(cnf_matrix,2)
+              
+        except:
+            cnf_matrix  = np.zeros((self.n_classes,self.n_classes))
+            print("Not enough samples to compute confusion matrix")
+       
         df = pd.DataFrame(cnf_matrix,self.categorical_labels,self.categorical_labels)
-        _, ax = plt.subplots(1, figsize=(12, 8))
+        fig = plt.figure(figsize=(15,10),dpi = 125)
 
-        sns.set_context("notebook", font_scale=1, rc={"lines.linewidth": 2.5})
+        sns.set_context("notebook", font_scale=1, rc={"lines.linewidth": 2})
         sns.heatmap(df,cmap ="Oranges", annot=True) 
         plt.title(title)
-        # Save
-        fig_file= ".".join([title,ext])
         if save:
-            plt.savefig(os.path.join(self.results_folder,fig_file))
-        plt.show()
+            self.save_fig(title,ext,fig,epoch)
+
+        
+    def plot_pr_curves(self,base_dir):
+        labels = label_binarize(self.true_labels, classes=range(self.n_classes))
+        scores = self.scores.copy()
+        #save pr_curve for each class
+        writer = self.initialize_writer(base_dir)
+        for i in range(self.n_classes):
+            curve_title = "pr_curve_{}".format(self.categorical_labels[i])
+            writer.add_pr_curve(curve_title, labels[:,i], scores[:,i])
 
     def get_roc_scores(self):
         labels = label_binarize(self.true_labels, classes=range(self.n_classes))
@@ -101,7 +117,7 @@ class Results_plotter(Evaluator):
         fpr = {}
         tpr = {}
         roc_auc = {}
-        labels = self.true_labels.copy()
+        # labels = self.true_labels.copy()
         scores = self.scores.copy()
 
         #compute roc for each class
@@ -160,10 +176,8 @@ class Results_plotter(Evaluator):
         plt.ylabel('True Positive Rate')
         plt.title('Some extension of Receiver operating characteristic to multi-class')
         plt.legend(loc="lower right")
-        fig_file= ".".join([title,ext])
         if save:
-            plt.savefig(os.path.join(self.results_folder,fig_file))
-        plt.show()
+            self.save_fig(title,ext,fig)
 
 
 
@@ -189,8 +203,6 @@ class Results_plotter(Evaluator):
             cbar.set_ticks(np.arange(self.n_classes))
             cbar.set_ticklabels(self.categorical_labels)
             plt.title(title)
-            # Save
-            fig_file= ".".join([title,ext])
-            if save:
-                plt.savefig(os.path.join(self.results_folder,fig_file))
-            plt.show()
+
+        if save:
+            self.save_fig(title,ext,fig)

@@ -14,7 +14,7 @@ import pandas as pd
 import seaborn as sns
 from mpl_toolkits.mplot3d import Axes3D
 from numpy import fft
-from pyod.models.iforest import IForest
+# from pyod.models.iforest import IForest
 from scipy import signal
 from scipy.fftpack import fft
 from scipy.signal import welch
@@ -118,21 +118,28 @@ def segment_signal(data,new_samples_number,window_size):
 
 class state_gen:
     """"""
-    def __init__(self,pattern_start,pattern_stop,null_state="AG Null"):
+    def __init__(self,pattern_start,pattern_stop,split = False,null_state="Null"):
         self.previous = null_state
-        self.null_state=null_state
-        self.pattern_start=pattern_start
-        self.pattern_stop=pattern_stop
+        self.null_state = null_state
+        self.pattern_start = pattern_start
+        self.pattern_stop = pattern_stop
+        self.split = split
+        
+    def process_state(self,state):
+        if (self.split):
+            #Keep the root of the state (eg. _Y6014 IntervalStart --> _Y6014)
+            state =  state.split()[0]
+        return state
 
     def __call__(self,actual):
         if(not(pd.isnull(actual))):
             #Start condition
             if((re.search(self.pattern_start,actual))!=None):
-                self.previous=actual
+                self.previous = self.process_state(actual)
                             
             #End Condition
             elif((re.search(self.pattern_stop,actual))!=None):
-                self.previous=self.null_state
+                self.previous = self.null_state
                             
         return self.previous
       
@@ -163,9 +170,9 @@ def process_readings_participant(df,participant,samples_per_sl=100):
     short_cats=["Acc","Gyro","Gaze"]
 
     ##get targets and valid intervals
-    generator_target=state_gen("AG","Behaviour End")
+    generator_target=state_gen("AG","Behaviour End",split =False, null_state= "AG Null")
     df["target"]=df["Event"].apply(lambda event: generator_target(event))
-    generator_picture=state_gen("_Y.* IntervalStart","_Y.* IntervalEnd")
+    generator_picture=state_gen("_Y.* IntervalStart","_Y.* IntervalEnd",split =True)
     df["picture"]=df["Event"].apply(lambda event: generator_picture(event))
 
     df_dict={}
