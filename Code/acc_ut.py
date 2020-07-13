@@ -194,12 +194,40 @@ def process_readings_participant(df,participant,samples_per_sl=100):
     return df_merged
 
 
+def to_seconds(time,factor = 1000):
+    seconds = time/factor
+    return round(seconds,2)
 
-if __name__ == "__main__":
-    table_path=r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\Accelerometer_Data\Participants\2504e\CompleteData\CompleteData_raw_2504e.csv"
-   
-    raw_df=pd.read_csv(table_path,decimal=',')
-    df=process_readings_participant(raw_df,"pepelui",100)
-    sensor_comp,labels=segment_signal(df,50,100)
+def get_pictures_dataset(data,user,window_size,factor =1):
+    df_pictures = {"id":[],"target":[],"start":[],"end":[]}
 
-    print("HI")
+    for idx,(start, end) in enumerate(windows(data.index, window_size,factor)):
+        df_pictures["id"].append(f"{user}_{idx}")
+        df_pictures["target"].append(data.loc[start:end,"picture"].mode()[0])
+        df_pictures["start"].append(to_seconds(data.loc[start,"Recording timestamp"]))
+        df_pictures["end"].append(to_seconds(data.loc[end,"Recording timestamp"]))
+        
+    return pd.DataFrame.from_dict(df_pictures).set_index("id")
+
+def filter_nulls(df):
+    #get samples of majoritary class different than null
+    try:
+        samples_max=max(df[df["target"]!="Null"]
+                        .target \
+                        .value_counts() ) 
+    except:
+        return df
+    #get id for null and rest of labels
+    null_idx=df[df["target"]=="Null"].index
+    samples_null = len(null_idx)
+    if(samples_null>samples_max):
+        #perform random undersampling
+        rest_idx = df[df["target"]!="Null"].index
+        # sample a subset of id from null samples to match majoritary class samples
+        selected_idx = np.random.choice(range(samples_null), size=samples_max, replace=False)
+        null_idx=null_idx[selected_idx]
+        #filter df 
+        df = df.loc[null_idx|rest_idx]
+
+    return df
+        

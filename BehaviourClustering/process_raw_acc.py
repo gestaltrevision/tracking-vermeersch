@@ -1,12 +1,17 @@
-import pandas as pd
-import numpy as np
-import os
 import argparse
+import os
 import sys
+
+import numpy as np
+import pandas as pd
+from tqdm import tqdm
 project_path=os.path.dirname(os.getcwd()) 
 sys.path.append(os.path.join(project_path,"Code"))
-from tqdm import tqdm
-from acc_ut import process_readings_participant,segment_signal
+
+from acc_ut import (filter_nulls, get_pictures_dataset,
+                    process_readings_participant, segment_signal)
+
+
 
 
 parser = argparse.ArgumentParser()
@@ -50,29 +55,19 @@ if __name__ == "__main__":
         #convert raw acc data into standard form
         raw_df=pd.read_csv(file,decimal=',')
         df=process_readings_participant(raw_df,participant,args.n_samples)
+        pictures_df = get_pictures_dataset(df,participant,500)
+        pictures_df = filter_nulls(pictures_df)
         sensor_comp,labels=segment_signal(df,new_samples_number,samples_per_sl)
-        # data.append(sensor_comp)
-        # targets.append(labels)
+   
         np.save(os.path.join(os.path.dirname(file),'segments_data'), sensor_comp)
         np.save(os.path.join(os.path.dirname(file),'targets_data'), labels)
 
         #save processed df of each participant into its correspondent folder
         dir_path=os.path.join(os.path.dirname(file),"{0}_{1}.pkl".format(args.base_name,participant))
         df.to_pickle(dir_path)
+        video_table_file  = os.path.join(folder,f"video_df_{participant}.csv")
+        pictures_df.to_csv(video_table_file)
 
         print("Succesfully raw data  of participant : {} processed".format(participant))
 
-    # #save full targets,readings
-    # dataset_path=os.path.join(args.data_dir,"Datasets",args.dataset_name)
-                               
-    # if(not(os.path.isdir(dataset_path))):
-    #     os.makedirs(dataset_path)
-
-    # data=np.concatenate(data)
-    # np.save(os.path.join(dataset_path,"data"),data)
-    # targets=np.concatenate(targets)
-    # np.save(os.path.join(dataset_path,"targets"),targets)
-
-
-
-
+   

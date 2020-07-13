@@ -29,6 +29,19 @@
             ]
         },
         {
+            "name": " Get video clips script",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/get_video_clips.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--root_path_data","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\AnnotatedData\\FinalDatasets\\Participants",
+                "--root_path_video","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\AnnotatedData\\Videos_raw",
+                "--video_folder_root", "ArtworkClips",
+
+            ]
+        },
+        {
             "name": " Datasets Debugging",
             "type": "python",
             "request": "launch",
