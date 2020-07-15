@@ -73,6 +73,8 @@ def create_subplot_sample(sample,axs,sample_id,n_components):
     for component in range(n_components):
         axs[component,sample_id].plot(sample[0,:,component])
     return axs
+
+    
 # if __name__ == "__main__":
 #     import os 
 #     import numpy as np

@@ -187,11 +187,18 @@ class Trainer(object):
         for v in self.optimizers.values():
             v.step()
 
-    def step_lr_plateau_schedulers(self, validation_info):
+    # def step_lr_plateau_schedulers(self, validation_info):
+    #     if self.lr_schedulers is not None:
+    #         for k, v in self.lr_schedulers.items():
+    #             if k.endswith("plateau"):
+    #                 v.step(validation_info)
+
+    def step_lr_schedulers(self):
         if self.lr_schedulers is not None:
             for k, v in self.lr_schedulers.items():
-                if k.endswith("plateau"):
-                    v.step(validation_info)
+                if k.endswith(self.allowed_lr_scheduler_key_suffixes["iteration"]):
+                    v.step()
+
 
     def train_batch(self,batch,metrics):
         self.set_to_train()
@@ -215,13 +222,13 @@ class Trainer(object):
 
             for i, batch in enumerate(self.train_loader):
                 metrics_train=self.train_batch(batch,metrics_train)
-                metrics_eval=self.evaluate_set(metrics_eval)        
+                metrics_eval=self.evaluate_set(metrics_eval)  
+                self.step_lr_schedulers()      
                 
             self.log_metrics(metrics_train,metrics_eval,
                             epoch,i)
 
             validation_info = metrics_train["total_loss"]/i
-            self.step_lr_plateau_schedulers(validation_info)
             #Check if we are overfitting 
             early_stopping(metrics_eval[metric_kind]/i,
                             self.models,

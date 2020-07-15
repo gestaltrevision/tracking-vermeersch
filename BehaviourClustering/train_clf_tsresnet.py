@@ -20,6 +20,8 @@ from sklearn.metrics import (balanced_accuracy_score, confusion_matrix,
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from tqdm.notebook import tqdm
 from Training_modular import Trainer
+from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--config_path", type=str,
@@ -32,6 +34,7 @@ if __name__ == "__main__":
     config_path = args.config_path
     with open(config_path,"rb") as f:
         config = yaml.safe_load(f)
+    
 
     model_folder = config["model_folder"]
     dataset_folder = config["dataset_folder"]
@@ -41,6 +44,7 @@ if __name__ == "__main__":
     #create results folder if its not yet been created
     if not(os.path.isdir(results_folder)):
         os.makedirs(results_folder)
+    #LOAD TRAINING CONFIG
 
     #set-up
     scaler=StandardScaler()
@@ -75,18 +79,27 @@ if __name__ == "__main__":
        trunk = load_pretrained_model("trunk", model_folder, trunk, device)
        embedder = load_pretrained_model("embedder", model_folder, embedder, device)
 
-    trunk_optimizer = torch.optim.RMSprop(trunk.parameters(), lr= config["lr_trunk"] , weight_decay= 5e-5)
-    embedder_optimizer = torch.optim.RMSprop(embedder.parameters(), lr= config["lr_embedder"] , weight_decay= 5e-5)
-    classifier_optimizer =  torch.optim.RMSprop(classifier.parameters(), lr= config["lr_classifier"] , weight_decay= 5e-5)
+    trunk_optimizer = torch.optim.SGD(trunk.parameters(), lr= config["lr"] , momentum= 0.9,weight_decay= 5e-5)
+    embedder_optimizer = torch.optim.SGD(embedder.parameters(), lr= config["lr"] , momentum= 0.9, weight_decay= 5e-5)
+    classifier_optimizer =  torch.optim.SGD(classifier.parameters(), lr= config["lr"] , momentum= 0.9, weight_decay= 5e-5)
+    #set schedulers
+    scheduler_trunk = CosineAnnealingWarmRestarts(trunk_optimizer,params["T_0"],params["T_mult"])
+    scheduler_embedder = CosineAnnealingWarmRestarts(embedder_optimizer,params["T_0"],params["T_mult"])
+    scheduler_classifier = CosineAnnealingWarmRestarts(classifier_optimizer,params["T_0"],params["T_mult"])
 
     #wrap
     freeze_these  = config["freeze"]
     models = {"trunk": trunk, "embedder": embedder, "classifier": classifier}
     optimizers_list = [trunk_optimizer,embedder_optimizer,classifier_optimizer]
-
+    scheduler_list  = [scheduler_trunk,scheduler_embedder,scheduler_classifier]
     optimizers = {f"{model}_optimizer": optimizer for model,optimizer 
                                                 in zip(models.keys(),optimizers_list)
                                                 if not(model in freeze_these)}
+    
+    lr_schedulers = {f"{model}_scheduler_by_iteration": scheduler for model,scheduler,
+                                                    in zip(models.keys(),scheduler_list)
+                                                    if not(model in freeze_these)}
+
     # Set the classification loss:
     class_ratios = train_dataset.get_class_ratios()
     class_weights = 1./class_ratios
@@ -108,6 +121,7 @@ if __name__ == "__main__":
                     prepare_batch_cnn,
                     device,
                     metrics_dict,
+                    lr_schedulers= lr_schedulers,
                     freeze_these = freeze_these)
     #train
     trainer.train(n_epochs,config["out_dir"],patience)
