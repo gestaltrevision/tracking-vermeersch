@@ -65,10 +65,12 @@ train_only: True
 more_fix_crop: False
 max_distort: 1
 benchmark: False
-calibration: True
-num_calibration_batches: 5
-quantized_type: "auto"
+calibration: False
+num_calib_batches: 5
+quantized: False
+quantized_dtype: "auto"
 calib_mode: "naive"
 ten_crop: False
 three_crop: True
 deploy: False
+use_softmax: True

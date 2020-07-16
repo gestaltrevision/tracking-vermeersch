@@ -113,8 +113,8 @@ def get_data_loader(opt, batch_size, num_workers, logger, kvstore="None"):
                              target_width=input_size, target_height=input_size, video_loader=opt.video_loader, use_decord=opt.use_decord,
                              data_aug=opt.data_aug, num_segments=opt.num_segments, transform=transform_test)
     elif opt.dataset == 'custom':
-        transform_train = video.VideoGroupTrainTransform(size=(224, 224), scale_ratios=[1.0, 0.8], mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        transform_test = transform_train
+        # transform_train = video.VideoGroupTrainTransform(size=(224, 224), scale_ratios=[1.0, 0.8], mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        # transform_test = transform_train
         train_dataset = VideoClsCustom(root=data_dir,
                                setting=opt.train_list,
                                train=True,

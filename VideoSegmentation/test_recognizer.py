@@ -18,6 +18,8 @@ from gluoncv.model_zoo import get_model
 from gluoncv.utils import makedirs, LRSequential, LRScheduler, split_and_load
 from parser_helper import parse_args
 
+import pickle
+
 # # CLI
 # def parse_args():
 #     parser = argparse.ArgumentParser(description='Test a trained model for video action recognition.')
@@ -177,16 +179,24 @@ def batch_fn(batch, ctx):
 def test(ctx, val_data, opt, net):
     acc_top1 = mx.metric.Accuracy()
     acc_top5 = mx.metric.TopKAccuracy(5)
+    true_labels = [] 
+    predictions = []
 
     for i, batch in enumerate(val_data):
         data, label = batch_fn(batch, ctx)
         outputs = []
+        aux_outputs = []
         for _, X in enumerate(data):
             X = X.reshape((-1,) + X.shape[2:])
-            pred = net(X.astype(opt.dtype, copy=False))
+            # pred = net(X.astype(opt.dtype, copy=False))
+            pred  = net(X)
             if opt.use_softmax:
                 pred = F.softmax(pred, axis=1)
             outputs.append(pred)
+            aux_outputs.append(pred.asnumpy())
+
+        predictions.append(aux_outputs)
+        true_labels.append(label.asnumpy())
 
         acc_top1.update(label, outputs)
         acc_top5.update(label, outputs)
@@ -200,6 +210,12 @@ def test(ctx, val_data, opt, net):
 
     _, top1 = acc_top1.get()
     _, top5 = acc_top5.get()
+    #save true_labels, predictions
+    with open(os.path.join(opt.save_dir,"true_labels.pkl"),"wb") as f:
+        pickle.dump(true_labels,f)
+    with open(os.path.join(opt.save_dir,"predictions.pkl"),"wb") as f:
+        pickle.dump(predictions,f)
+
     return (top1, top5)
 
 
@@ -230,15 +246,19 @@ def benchmarking(opt, net, ctx):
 def calibration(net, val_data, opt, ctx, logger):
     if isinstance(ctx, list):
         ctx = ctx[0]
+    ctx  = mx.cpu()
     exclude_sym_layer = []
     exclude_match_layer = []
     if 'inceptionv3' not in opt.model:
         exclude_match_layer += ['concat']
     if opt.num_gpus > 0:
         raise ValueError('currently only supports CPU with MKL-DNN backend')
-    net = quantize_net(net, calib_data=val_data, quantized_dtype=opt.quantized_dtype, quantize_mode='full', calib_mode=opt.calib_mode,
+    net = quantize_net(net, calib_data=val_data, quantized_dtype=opt.quantized_dtype, calib_mode=opt.calib_mode,
                        exclude_layers=exclude_sym_layer, num_calib_examples=opt.batch_size * opt.num_calib_batches,
                        exclude_layers_match=exclude_match_layer, ctx=ctx, logger=logger)
+    # net = quantize_net(net, calib_data=val_data, quantized_dtype=opt.quantized_dtype, quantize_mode='full', calib_mode=opt.calib_mode,
+    #                    exclude_layers=exclude_sym_layer, num_calib_examples=opt.batch_size * opt.num_calib_batches,
+    #                    exclude_layers_match=exclude_match_layer, ctx=ctx, logger=logger)
     dir_path = os.path.dirname(os.path.realpath(__file__))
     dst_dir = os.path.join(dir_path, 'model')
     if not os.path.isdir(dst_dir):
@@ -257,14 +277,20 @@ def main(logger):
     gc.set_threshold(100, 5, 5)
 
     # set env
-    num_gpus = opt.num_gpus
-    batch_size = opt.batch_size
-    context = [mx.cpu()]
-    if num_gpus > 0:
-        batch_size *= max(1, num_gpus)
-        context = [mx.gpu(i) for i in range(num_gpus)]
-
+    # num_gpus = opt.num_gpus
+    # batch_size = opt.batch_size
+    # context = [mx.cpu()]
+    # if num_gpus > 0:
+    #     batch_size *= max(1, num_gpus)
+    #     context = [mx.gpu(i) for i in range(num_gpus)]
+    
+    num_gpus = 1
+    context = [mx.gpu(i) for i in range(num_gpus)]
+    per_device_batch_size = 5
+    num_workers = 12
+    batch_size = per_device_batch_size * num_gpus
     num_workers = opt.num_workers
+
     print('Total batch size is set to %d on %d GPUs' % (batch_size, num_gpus))
 
     # get data
@@ -364,8 +390,9 @@ def main(logger):
                              data_aug=opt.data_aug, num_segments=opt.num_segments, transform=transform_test)
 
     elif opt.dataset == 'custom':
-        # transform_train = video.VideoGroupTrainTransform(size=(224, 224), scale_ratios=[1.0, 0.8], mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-
+        transform_test = video.VideoGroupTrainTransform(size=(224, 224), scale_ratios=[1.0, 0.8], mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        print("loaded_data")
+        
         val_dataset = VideoClsCustom(root=opt.val_data_dir,
                                setting=opt.val_list,
                                train=False,
@@ -379,8 +406,10 @@ def main(logger):
     else:
         logger.info('Dataset %s is not supported yet.' % (opt.dataset))
 
-    val_data = gluon.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
-                                     prefetch=int(opt.prefetch_ratio * num_workers), last_batch='discard')
+    # val_data = gluon.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers,
+    #                                  prefetch=int(opt.prefetch_ratio * num_workers), last_batch='discard')
+    val_data = gluon.data.DataLoader(val_dataset, batch_size=batch_size,shuffle=False, num_workers=num_workers)                         
+
     print('Load %d test samples in %d iterations.' % (len(val_dataset), len(val_data)))
 
     # calibrate FP32 model into INT8 model
