@@ -16,10 +16,13 @@ from gluoncv.data import UCF101, Kinetics400, SomethingSomethingV2, HMDB51, Vide
 from gluoncv.model_zoo import get_model
 from gluoncv.utils import makedirs, LRSequential, LRScheduler, split_and_load
 from gluoncv.data.sampler import SplitSampler, ShuffleSplitSampler
-
+import os
 from bunch import bunchify,Bunch
+from lr_schedulers import CosineAnnealingSchedule,CyclicalSchedule
 import yaml
 from tqdm import tqdm
+from pathlib import Path
+from parser_helper import parse_args
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--default_path", type=str,
@@ -28,30 +31,7 @@ parser.add_argument("--default_path", type=str,
 parser.add_argument("--custom_path", type=str,
                     help="File with current custom config settings for testing")
 
-def _merge_configs(config,custom_config):
-    for key in custom_config.keys():
-        config[key] = custom_config[key]
-    return config
 
-
-def parse_args ():
-    #read default config
-    args=parser.parse_args()
-    # load model config
-    default_path = args.default_path
-    with open(default_path,"rb") as f:
-        config = yaml.safe_load(f)
-    #read current config
-    custom_path = args.custom_path
-    with open(custom_path,"rb") as f:
-        custom_config = yaml.safe_load(f)
-    #merge
-    config = _merge_configs(config,custom_config)
-    #bunchify
-    opt = Bunch( (k, bunchify(v)) for k,v in config.items() )
-
-    return opt
-    
     
 def get_data_loader(opt, batch_size, num_workers, logger, kvstore="None"):
     data_dir = opt.data_dir
@@ -175,8 +155,10 @@ def get_data_loader(opt, batch_size, num_workers, logger, kvstore="None"):
     return train_data, val_data, batch_fn
 
 def main():
-    opt = parse_args()
-    makedirs(opt.save_dir)
+    opt = parse_args(parser)
+
+    if not(os.path.isdir(opt.save_dir)):
+        Path(opt.save_dir).mkdir(parents = True)
 
     filehandler = logging.FileHandler(os.path.join(opt.save_dir, opt.logging_file))
     streamhandler = logging.StreamHandler()
@@ -223,7 +205,8 @@ def main():
     if opt.clip_grad > 0:
         optimizer_params = {'learning_rate': opt.lr, 'wd': opt.wd, 'momentum': opt.momentum, 'clip_gradient': opt.clip_grad}
     else:
-        optimizer_params = {'learning_rate': opt.lr, 'wd': opt.wd, 'momentum': opt.momentum}
+        # optimizer_params = {'learning_rate': opt.lr, 'wd': opt.wd, 'momentum': opt.momentum}
+        optimizer_params = {'wd': opt.wd, 'momentum': opt.momentum}
 
     if opt.dtype != 'float32':
         optimizer_params['multi_precision'] = True
@@ -245,18 +228,22 @@ def main():
   
     train_data, val_data, batch_fn = get_data_loader(opt, batch_size, num_workers, logger)
 
-    num_batches = len(train_data) // opt.accumulate
-    lr_scheduler = LRSequential([
-        LRScheduler('linear', base_lr=opt.warmup_lr, target_lr=opt.lr,
-                    nepochs=opt.warmup_epochs, iters_per_epoch=num_batches),
-        LRScheduler(opt.lr_mode, base_lr=opt.lr, target_lr=0,
-                    nepochs=opt.num_epochs - opt.warmup_epochs,
-                    iters_per_epoch=num_batches,
-                    step_epoch=lr_decay_epoch,
-                    step_factor=lr_decay, power=2)
-    ])
+    #define optimizer
+    # lr_scheduler = LRSequential([
+    #     LRScheduler('linear', base_lr=opt.warmup_lr, target_lr=opt.lr,
+    #                 nepochs=opt.warmup_epochs, iters_per_epoch=num_batches),
+    #     LRScheduler(opt.lr_mode, base_lr=opt.lr, target_lr=0,
+    #                 nepochs=opt.num_epochs - opt.warmup_epochs,
+    #                 iters_per_epoch=num_batches,
+    #                 step_epoch=lr_decay_epoch,
+    #                 step_factor=lr_decay, power=2)
+    # ])
+    iterations_per_epoch = len(train_data) // opt.accumulate
+    lr_scheduler = CyclicalSchedule(CosineAnnealingSchedule, min_lr=0, max_lr=opt.lr,
+                            cycle_length=10*iterations_per_epoch, cycle_length_decay=2, cycle_magnitude_decay=1)
     optimizer_params['lr_scheduler'] = lr_scheduler
 
+    optimizer  = mx.optimizer.SGD(**optimizer_params)
     train_metric = mx.metric.Accuracy()
     acc_top1 = mx.metric.Accuracy()
     acc_top5 = mx.metric.TopKAccuracy(5)
@@ -312,13 +299,19 @@ def main():
             else:
                 logger.info('Current model does not support partial batch normalization.')
             
-            trainer = gluon.Trainer(net.collect_params(train_patterns), optimizer, optimizer_params, update_on_kvstore=False)
+            # trainer = gluon.Trainer(net.collect_params(train_patterns), optimizer, optimizer_params, update_on_kvstore=False)
+            trainer = gluon.Trainer(net.collect_params(train_patterns), optimizer, update_on_kvstore=False)
+
 
         elif opt.freeze_bn:
             train_patterns = '.*weight|.*bias'
-            trainer = gluon.Trainer(net.collect_params(train_patterns), optimizer, optimizer_params, update_on_kvstore=False)
+            # trainer = gluon.Trainer(net.collect_params(train_patterns), optimizer, optimizer_params, update_on_kvstore=False)
+            trainer = gluon.Trainer(net.collect_params(train_patterns), optimizer, update_on_kvstore=False)
+
         else:
-            trainer = gluon.Trainer(net.collect_params(), optimizer, optimizer_params, update_on_kvstore=False)
+            # trainer = gluon.Trainer(net.collect_params(), optimizer, optimizer_params, update_on_kvstore=False)
+            trainer = gluon.Trainer(net.collect_params(), optimizer, update_on_kvstore=False)
+
 
         if opt.accumulate > 1:
             params = [p for p in net.collect_params().values() if p.grad_req != 'null']
