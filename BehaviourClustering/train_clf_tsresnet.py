@@ -18,9 +18,18 @@ from sklearn.metrics import (balanced_accuracy_score, confusion_matrix,
                              f1_score, matthews_corrcoef, precision_score,
                              recall_score)
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from tqdm.notebook import tqdm
+from tqdm import tqdm
 from Training_modular import Trainer
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
+from ax import load
+
+def fetch_hyperparameters(file):
+  experiment = load(file)
+  data = experiment.fetch_data()
+  df = data.df
+  best_arm_name = df.arm_name[df['mean'] == df['mean'].max()].values[0]
+  best_arm = experiment.arms_by_name[best_arm_name]
+  return best_arm.parameters
 
 parser = argparse.ArgumentParser()
 
@@ -34,18 +43,17 @@ if __name__ == "__main__":
     config_path = args.config_path
     with open(config_path,"rb") as f:
         config = yaml.safe_load(f)
-    
 
     model_folder = config["model_folder"]
     dataset_folder = config["dataset_folder"]
-    results_folder  = config["results_folder"]
+    output_folder  = config["output_folder"]
     batch_size = config["batch_size"]
     embedding_dim = config["embedding_dim"]
     #create results folder if its not yet been created
-    if not(os.path.isdir(results_folder)):
-        os.makedirs(results_folder)
+    if not(os.path.isdir(output_folder)):
+        os.makedirs(output_folder)
     #LOAD TRAINING CONFIG
-
+    params_opt  = fetch_hyperparameters(config["optim_file"])
     #set-up
     scaler=StandardScaler()
     encoder=LabelEncoder
@@ -69,23 +77,27 @@ if __name__ == "__main__":
     trunk_arch = tsresnet18
     trunk_params={"num_classes":num_classes,"n_components":n_components}
     trunk_model, trunk_output_size  = trunk_arch(**trunk_params)
-    trunk  = torch.nn.DataParallel(trunk_model)
+    # trunk  = torch.nn.DataParallel(trunk_model)
     # Set embedder model
-    embedder = torch.nn.DataParallel(MLP([trunk_output_size, embedding_dim]))
+    embedder_model = MLP([trunk_output_size, embedding_dim])
+    # embedder = torch.nn.DataParallel(MLP([trunk_output_size, embedding_dim]))
     #Classifier
     classifier =  torch.nn.DataParallel(MLP([embedding_dim, num_classes]))
 
     if(config["pretrain"]==True):
-       trunk = load_pretrained_model("trunk", model_folder, trunk, device)
-       embedder = load_pretrained_model("embedder", model_folder, embedder, device)
+       trunk = load_pretrained_model("trunk", model_folder, trunk_model, device)
+       embedder = load_pretrained_model("embedder", model_folder, embedder_model, device)
+    else:
+        trunk = torch.nn.DataParallel(trunk_model)
+        embedder = torch.nn.DataParallel(embedder_model)
 
-    trunk_optimizer = torch.optim.SGD(trunk.parameters(), lr= config["lr"] , momentum= 0.9,weight_decay= 5e-5)
-    embedder_optimizer = torch.optim.SGD(embedder.parameters(), lr= config["lr"] , momentum= 0.9, weight_decay= 5e-5)
-    classifier_optimizer =  torch.optim.SGD(classifier.parameters(), lr= config["lr"] , momentum= 0.9, weight_decay= 5e-5)
+    trunk_optimizer = torch.optim.SGD(trunk.parameters(), lr= params_opt["lr"] , momentum= 0.9,weight_decay= 5e-5)
+    embedder_optimizer = torch.optim.SGD(embedder.parameters(), lr= params_opt["lr"] , momentum= 0.9, weight_decay= 5e-5)
+    classifier_optimizer =  torch.optim.SGD(classifier.parameters(), lr= params_opt["lr"] , momentum= 0.9, weight_decay= 5e-5)
     #set schedulers
-    scheduler_trunk = CosineAnnealingWarmRestarts(trunk_optimizer,params["T_0"],params["T_mult"])
-    scheduler_embedder = CosineAnnealingWarmRestarts(embedder_optimizer,params["T_0"],params["T_mult"])
-    scheduler_classifier = CosineAnnealingWarmRestarts(classifier_optimizer,params["T_0"],params["T_mult"])
+    scheduler_trunk = CosineAnnealingWarmRestarts(trunk_optimizer,params_opt["T_0"],params_opt["T_mult"])
+    scheduler_embedder = CosineAnnealingWarmRestarts(embedder_optimizer,params_opt["T_0"],params_opt["T_mult"])
+    scheduler_classifier = CosineAnnealingWarmRestarts(classifier_optimizer,params_opt["T_0"],params_opt["T_mult"])
 
     #wrap
     freeze_these  = config["freeze"]
@@ -124,6 +136,6 @@ if __name__ == "__main__":
                     lr_schedulers= lr_schedulers,
                     freeze_these = freeze_these)
     #train
-    trainer.train(n_epochs,config["out_dir"],patience)
+    trainer.train(n_epochs,output_folder,patience)
                 
 

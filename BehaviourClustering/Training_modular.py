@@ -196,9 +196,8 @@ class Trainer(object):
     def step_lr_schedulers(self):
         if self.lr_schedulers is not None:
             for k, v in self.lr_schedulers.items():
-                if k.endswith(self.allowed_lr_scheduler_key_suffixes["iteration"]):
+                if k.endswith("iteration"):
                     v.step()
-
 
     def train_batch(self,batch,metrics):
         self.set_to_train()
