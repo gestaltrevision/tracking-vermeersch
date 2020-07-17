@@ -1,0 +1,6 @@
+model_folder:  "/gdrive/My Drive/Models/TsResnet18_SGDR/Classifiers/balancedfinetuned_256"
+dataset_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+results_folder: "/gdrive/My Drive/Results/Behaviours/balancedfinetuned_256"
+batch_size: 64
+embedding_dim: 256
+calibration: True

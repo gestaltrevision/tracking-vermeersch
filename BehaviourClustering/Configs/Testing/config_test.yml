@@ -1,6 +1,0 @@
-model_folder:  "/gdrive/My Drive/Models/TsResnet18/Embedder_32/Classifiers/Classifier_frozen"
-dataset_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
-results_folder: "/gdrive/My Drive/Results/Behaviours/Test"
-batch_size: 64
-embedding_dim: 256
-temperature: True
