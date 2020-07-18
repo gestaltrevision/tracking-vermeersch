@@ -175,6 +175,15 @@ def batch_fn(batch, ctx):
     label = split_and_load(batch[1], ctx_list=ctx, batch_axis=0, even_split=False)
     return data, label
 
+def find_model_params():
+    try:
+        resume_params = next(path for path in os.listdir(config["model_folder"])
+                                if (config["model"] in path) and ("params" in path))
+    except:
+        logger.info("There is no trained model in current model folder")
+
+    return resume_params
+
 
 def test(ctx, val_data, opt, net):
     acc_top1 = mx.metric.Accuracy()
@@ -348,11 +357,13 @@ def main(logger):
         net = get_model(name=model_name, nclass=classes, pretrained=opt.use_pretrained, num_segments=opt.num_segments, num_crop=opt.num_crop)
         net.cast(opt.dtype)
         net.collect_params().reset_ctx(context)
+        resume_params  = find_model_params()
+
         if opt.mode == 'hybrid':
             net.hybridize(static_alloc=True, static_shape=True)
-        if opt.resume_params is not '' and not opt.use_pretrained:
-            net.load_parameters(opt.resume_params, ctx=context)
-            print('Pre-trained model %s is successfully loaded.' % (opt.resume_params))
+        if resume_params is not '' and not opt.use_pretrained:
+            net.load_parameters(resume_params, ctx=context)
+            print('Pre-trained model %s is successfully loaded.' % (resume_params))
         else:
             print('Pre-trained model is successfully loaded from the model zoo.')
     else:

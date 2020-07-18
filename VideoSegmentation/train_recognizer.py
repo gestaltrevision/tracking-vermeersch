@@ -157,9 +157,9 @@ def get_data_loader(opt, batch_size, num_workers, logger, kvstore="None"):
 def main():
     opt = parse_args(parser)
 
-    if not(os.path.isdir(opt.save_dir)):
-        Path(opt.save_dir).mkdir(parents = True)
-
+    assert not(os.path.isdir(opt.save_dir)), "already done this experiment..."
+    Path(opt.save_dir).mkdir(parents = True)
+    
     filehandler = logging.FileHandler(os.path.join(opt.save_dir, opt.logging_file))
     streamhandler = logging.StreamHandler()
     logger = logging.getLogger('')
@@ -240,7 +240,7 @@ def main():
     # ])
     iterations_per_epoch = len(train_data) // opt.accumulate
     lr_scheduler = CyclicalSchedule(CosineAnnealingSchedule, min_lr=0, max_lr=opt.lr,
-                            cycle_length=10*iterations_per_epoch, cycle_length_decay=2, cycle_magnitude_decay=1)
+                            cycle_length=opt.T_0*iterations_per_epoch, cycle_length_decay=opt.T_mult, cycle_magnitude_decay=1)
     optimizer_params['lr_scheduler'] = lr_scheduler
 
     optimizer  = mx.optimizer.SGD(**optimizer_params)
