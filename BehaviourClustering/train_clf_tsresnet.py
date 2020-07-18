@@ -45,7 +45,9 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
 
     model_folder = config["model_folder"]
-    dataset_folder = config["dataset_folder"]
+    dataset_folder_train = config["train_folder"]
+    dataset_folder_val = config["val_folder"]
+
     output_folder  = config["output_folder"]
     batch_size = config["batch_size"]
     embedding_dim = config["embedding_dim"]
@@ -64,8 +66,12 @@ if __name__ == "__main__":
     prepare_batch_fcn=prepare_batch_cnn
 
     #creating train and valid datasets
-    train_dataset= TSDataset(dataset_folder,scaler,"Train",level,data_types)
-    validation_dataset= TSDataset(dataset_folder,scaler,"Val",level,data_types)
+    train_dataset= TSDataset(dataset_folder_train,scaler,"Train",level,data_types,
+                            config["ActiveLearning"],config["base_folder"])
+
+    validation_dataset= TSDataset(dataset_folder_val,scaler,"Val",level,data_types,
+                                    config["ActiveLearning"],config["base_folder"])
+
     train_loader = DataLoader(train_dataset, batch_size=batch_size,shuffle=True)
     val_loader= DataLoader(validation_dataset, batch_size=batch_size,shuffle=True)
     data_loaders = [train_loader,val_loader]
@@ -73,7 +79,8 @@ if __name__ == "__main__":
     # Load Pretrained model
     models={}
     # Set trunk model  
-    num_classes=train_dataset.num_classes
+    # num_classes=train_dataset.num_classes
+    num_classes = train_dataset.num_classes
     trunk_arch = tsresnet18
     trunk_params={"num_classes":num_classes,"n_components":n_components}
     trunk_model, trunk_output_size  = trunk_arch(**trunk_params)
@@ -82,14 +89,19 @@ if __name__ == "__main__":
     embedder_model = MLP([trunk_output_size, embedding_dim])
     # embedder = torch.nn.DataParallel(MLP([trunk_output_size, embedding_dim]))
     #Classifier
-    classifier =  torch.nn.DataParallel(MLP([embedding_dim, num_classes]))
+    classifier_model = MLP([embedding_dim, num_classes])
 
     if(config["pretrain"]==True):
        trunk = load_pretrained_model("trunk", model_folder, trunk_model, device)
        embedder = load_pretrained_model("embedder", model_folder, embedder_model, device)
+       classifier = load_pretrained_model("classifier", model_folder, classifier_model, device)
     else:
         trunk = torch.nn.DataParallel(trunk_model)
         embedder = torch.nn.DataParallel(embedder_model)
+        classifier = torch.nn.DataParallel(classifier_model)
+    #override opt parameter for Active Learning case
+    if(config["ActiveLearning"]):
+        params_opt = {"lr":3e-3,"T_0":1,"T_mult":2}
 
     trunk_optimizer = torch.optim.SGD(trunk.parameters(), lr= params_opt["lr"] , momentum= 0.9,weight_decay= 5e-5)
     embedder_optimizer = torch.optim.SGD(embedder.parameters(), lr= params_opt["lr"] , momentum= 0.9, weight_decay= 5e-5)

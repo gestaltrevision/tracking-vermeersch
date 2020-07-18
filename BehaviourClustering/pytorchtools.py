@@ -37,7 +37,11 @@ def load_pretrained_model(model_name, model_dir, model, device):
   except:
     checkpoint_file = next(file for file in os.listdir(model_dir) if (f"{model_name}" in file))
   checkpoint_path=os.path.join(model_dir,checkpoint_file)
-  model.load_state_dict(torch.load(checkpoint_path))
+  try:
+    model.load_state_dict(torch.load(checkpoint_path))
+  except:
+    model = torch.nn.DataParallel(model)
+    model.load_state_dict(torch.load(checkpoint_path))
   return model.to(device)
 
 def get_samples_from_class(data_loader,label,n_samples = 5):

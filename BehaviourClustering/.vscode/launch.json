@@ -36,8 +36,9 @@
             "console": "integratedTerminal",
             "args": [
                 "--root_path_data","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\AnnotatedData\\FinalDatasets\\Participants",
-                "--root_path_video","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\AnnotatedData\\Videos_raw",
+                "--root_path_video","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\ProjectData\\Media",
                 "--video_folder_root", "ArtworkClips",
+                "--metadata_path","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\AnnotatedData\\FinalDatasets\\Datasets\\Video_Dataset_meta\\recordings_meta.json"
 
             ]
         },

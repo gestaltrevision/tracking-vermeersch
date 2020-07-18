@@ -26,3 +26,15 @@ def parse_args (parser):
 
     return opt
     
+
+def find_model_params(opt):
+    try:
+        resume_file = next(path for path in os.listdir(opt.model_folder)
+                                if ((opt.model in path) and ("params" in path)))
+        return os.path.join(opt.model_folder,resume_file)
+
+    except:
+        print("There is no trained model in current model folder")
+        return ""
+
+

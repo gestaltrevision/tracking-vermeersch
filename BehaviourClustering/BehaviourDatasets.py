@@ -34,7 +34,7 @@ class TSDataset(Dataset):
             Array containing the target (Binary) over each of the correspondant samples
         
     """
-    def __init__(self,folder,scaler,set_cat,level,data_types=[True,True,True]):
+    def __init__(self,folder,scaler,set_cat,level,data_types=[True,True,True],ActiveLearning = False,base_folder = None):
         #Get folder ("Train" or "Test")
         self.data_folder=os.path.join(folder,set_cat)
         assert os.path.isdir(self.data_folder) 
@@ -56,7 +56,7 @@ class TSDataset(Dataset):
         self.data=self.data.reshape(-1,n_components)
         
         #Scalling/Encoding
-        if(set_cat=="Train"):
+        if(set_cat=="Train" and not(ActiveLearning)):
           #scaler
           self.scaler=scaler.fit(self.data)
           #save scaler (in dataset folder)
@@ -65,12 +65,15 @@ class TSDataset(Dataset):
           self.encoder=LabelEncoder().fit(self.targets)
           joblib.dump(self.encoder,os.path.join(folder,'encoder_train.pkl'))
 
+        if(base_folder ==None):
+            base_folder = folder
+            
         else:
           #get scaler,encoder file
-          scaler_file=next(file for file in os.listdir(folder) if "scaler" in file)
-          encoder_file=next(file for file in os.listdir(folder) if "encoder" in file)
-          self.scaler=joblib.load(os.path.join(folder,scaler_file))
-          self.encoder=joblib.load(os.path.join(folder,encoder_file))         
+          scaler_file=next(file for file in os.listdir(base_folder) if "scaler" in file)
+          encoder_file=next(file for file in os.listdir(base_folder) if "encoder" in file)
+          self.scaler=joblib.load(os.path.join(base_folder,scaler_file))
+          self.encoder=joblib.load(os.path.join(base_folder,encoder_file))         
 
         #Data Filtering and Scaling
         self.data=self.scaler.transform(self.data).reshape(samples,sequence_length,n_components)

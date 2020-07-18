@@ -22,7 +22,8 @@ from lr_schedulers import CosineAnnealingSchedule,CyclicalSchedule
 import yaml
 from tqdm import tqdm
 from pathlib import Path
-from parser_helper import parse_args
+from parser_helper import parse_args, find_model_params
+
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--default_path", type=str,
@@ -221,23 +222,15 @@ def main():
     net.collect_params().reset_ctx(context)
     logger.info(net)
 
-    if opt.resume_params is not '':
-        net.load_parameters(opt.resume_params, ctx=context)
-        print('Continue training from model %s.' % (opt.resume_params))
+    resume_params  = find_model_params(opt)
+    if resume_params is not '':
+        net.load_parameters(resume_params, ctx=context)
+        print('Continue training from model %s.' % (resume_params))
 
   
     train_data, val_data, batch_fn = get_data_loader(opt, batch_size, num_workers, logger)
 
-    #define optimizer
-    # lr_scheduler = LRSequential([
-    #     LRScheduler('linear', base_lr=opt.warmup_lr, target_lr=opt.lr,
-    #                 nepochs=opt.warmup_epochs, iters_per_epoch=num_batches),
-    #     LRScheduler(opt.lr_mode, base_lr=opt.lr, target_lr=0,
-    #                 nepochs=opt.num_epochs - opt.warmup_epochs,
-    #                 iters_per_epoch=num_batches,
-    #                 step_epoch=lr_decay_epoch,
-    #                 step_factor=lr_decay, power=2)
-    # ])
+
     iterations_per_epoch = len(train_data) // opt.accumulate
     lr_scheduler = CyclicalSchedule(CosineAnnealingSchedule, min_lr=0, max_lr=opt.lr,
                             cycle_length=opt.T_0*iterations_per_epoch, cycle_length_decay=opt.T_mult, cycle_magnitude_decay=1)

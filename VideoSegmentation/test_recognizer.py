@@ -16,151 +16,17 @@ from gluoncv.data.transforms import video
 from gluoncv.data import UCF101, Kinetics400, SomethingSomethingV2, HMDB51,VideoClsCustom
 from gluoncv.model_zoo import get_model
 from gluoncv.utils import makedirs, LRSequential, LRScheduler, split_and_load
-from parser_helper import parse_args
+from parser_helper import parse_args, find_model_params
 
 import pickle
+from pathlib import Path
+from Evaluation_video import Evaluator_video
+import pandas as pd
+import joblib
+from sklearn.metrics import (balanced_accuracy_score, confusion_matrix,
+                             f1_score, matthews_corrcoef, precision_score,
+                             recall_score)
 
-# # CLI
-# def parse_args():
-#     parser = argparse.ArgumentParser(description='Test a trained model for video action recognition.')
-#     parser.add_argument('--dataset', type=str, default='ucf101', choices=['ucf101', 'kinetics400', 'somethingsomethingv2', 'hmdb51'],
-#                         help='which dataset to use.')
-#     parser.add_argument('--data-dir', type=str, default=os.path.expanduser('~/.mxnet/datasets/ucf101/rawframes'),
-#                         help='training (and validation) pictures to use.')
-#     parser.add_argument('--val-data-dir', type=str, default=os.path.expanduser('~/.mxnet/datasets/ucf101/rawframes'),
-#                         help='validation pictures to use.')
-#     parser.add_argument('--train-list', type=str, default=os.path.expanduser('~/.mxnet/datasets/ucf101/ucfTrainTestlist/ucf101_train_split_1_rawframes.txt'),
-#                         help='the list of training data')
-#     parser.add_argument('--val-list', type=str, default=os.path.expanduser('~/.mxnet/datasets/ucf101/ucfTrainTestlist/ucf101_val_split_1_rawframes.txt'),
-#                         help='the list of validation data')
-#     parser.add_argument('--batch-size', type=int, default=32,
-#                         help='training batch size per device (CPU/GPU).')
-#     parser.add_argument('--dtype', type=str, default='float32',
-#                         help='data type for training. default is float32')
-#     parser.add_argument('--model-prefix', type=str, required=False,
-#                     help='load static model as hybridblock.')
-#     parser.add_argument('--deploy', action='store_true',
-#                         help='whether load static model for deployment')
-#     parser.add_argument('--quantized', action='store_true', 
-#                         help='whether to use int8 pretrained  model')
-#     parser.add_argument('--num-iterations', type=int, default=100,
-#                         help='number of benchmarking iterations.')
-#     parser.add_argument('--num-gpus', type=int, default=0,
-#                         help='number of gpus to use.')
-#     parser.add_argument('-j', '--num-data-workers', dest='num_workers', default=4, type=int,
-#                         help='number of preprocessing workers')
-#     parser.add_argument('--model', type=str, required=True,
-#                         help='type of model to use. see vision_model for options.')
-#     parser.add_argument('--input-size', type=int, default=224,
-#                         help='size of the input image size. default is 224')
-#     parser.add_argument('--crop-ratio', type=float, default=0.875,
-#                         help='Crop ratio during validation. default is 0.875')
-#     parser.add_argument('--use-pretrained', action='store_true',
-#                         help='enable using pretrained model from gluon.')
-#     parser.add_argument('--hashtag', type=str, default='',
-#                         help='hashtag for pretrained models.')
-#     parser.add_argument('--use_se', action='store_true',
-#                         help='use SE layers or not in resnext. default is false.')
-#     parser.add_argument('--mixup', action='store_true',
-#                         help='whether train the model with mix-up. default is false.')
-#     parser.add_argument('--mixup-alpha', type=float, default=0.2,
-#                         help='beta distribution parameter for mixup sampling, default is 0.2.')
-#     parser.add_argument('--mixup-off-epoch', type=int, default=0,
-#                         help='how many last epochs to train without mixup, default is 0.')
-#     parser.add_argument('--label-smoothing', action='store_true',
-#                         help='use label smoothing or not in training. default is false.')
-#     parser.add_argument('--no-wd', action='store_true',
-#                         help='whether to remove weight decay on bias, and beta/gamma for batchnorm layers.')
-#     parser.add_argument('--teacher', type=str, default=None,
-#                         help='teacher model for distillation training')
-#     parser.add_argument('--temperature', type=float, default=20,
-#                         help='temperature parameter for distillation teacher model')
-#     parser.add_argument('--hard-weight', type=float, default=0.5,
-#                         help='weight for the loss of one-hot label for distillation training')
-#     parser.add_argument('--batch-norm', action='store_true',
-#                         help='enable batch normalization or not in vgg. default is false.')
-#     parser.add_argument('--save-frequency', type=int, default=10,
-#                         help='frequency of model saving.')
-#     parser.add_argument('--save-dir', type=str, default='params',
-#                         help='directory of saved models')
-#     parser.add_argument('--resume-epoch', type=int, default=0,
-#                         help='epoch to resume training from.')
-#     parser.add_argument('--resume-params', type=str, default='',
-#                         help='path of parameters to load from.')
-#     parser.add_argument('--resume-states', type=str, default='',
-#                         help='path of trainer state to load from.')
-#     parser.add_argument('--log-interval', type=int, default=50,
-#                         help='Number of batches to wait before logging.')
-#     parser.add_argument('--logging-file', type=str, default='train.log',
-#                         help='name of training log file')
-#     parser.add_argument('--use-gn', action='store_true',
-#                         help='whether to use group norm.')
-#     parser.add_argument('--eval', action='store_true',
-#                         help='directly evaluate the model.')
-#     parser.add_argument('--num-segments', type=int, default=1,
-#                         help='number of segments to evenly split the video.')
-#     parser.add_argument('--use-tsn', action='store_true',
-#                         help='whether to use temporal segment networks.')
-#     parser.add_argument('--new-height', type=int, default=256,
-#                         help='new height of the resize image. default is 256')
-#     parser.add_argument('--new-width', type=int, default=340,
-#                         help='new width of the resize image. default is 340')
-#     parser.add_argument('--new-length', type=int, default=1,
-#                         help='new length of video sequence. default is 1')
-#     parser.add_argument('--new-step', type=int, default=1,
-#                         help='new step to skip video sequence. default is 1')
-#     parser.add_argument('--num-classes', type=int, default=101,
-#                         help='number of classes.')
-#     parser.add_argument('--ten-crop', action='store_true',
-#                         help='whether to use ten crop evaluation.')
-#     parser.add_argument('--three-crop', action='store_true',
-#                         help='whether to use three crop evaluation.')
-#     parser.add_argument('--use-amp', action='store_true',
-#                         help='whether to use automatic mixed precision.')
-#     parser.add_argument('--prefetch-ratio', type=float, default=2.0,
-#                         help='set number of workers to prefetch data batch, default is 2 in MXNet.')
-#     parser.add_argument('--use-softmax', action='store_true',
-#                         help='whether to use softmax scores.')
-#     parser.add_argument('--video-loader', action='store_true',
-#                         help='if set to True, read videos directly instead of reading frames.')
-#     parser.add_argument('--use-decord', action='store_true',
-#                         help='if set to True, use Decord video loader to load data. Otherwise use mmcv video loader.')
-#     parser.add_argument('--slowfast', action='store_true',
-#                         help='if set to True, use data loader designed for SlowFast network.')
-#     parser.add_argument('--slow-temporal-stride', type=int, default=16,
-#                         help='the temporal stride for sparse sampling of video frames for slow branch in SlowFast network.')
-#     parser.add_argument('--fast-temporal-stride', type=int, default=2,
-#                         help='the temporal stride for sparse sampling of video frames for fast branch in SlowFast network.')
-#     parser.add_argument('--num-crop', type=int, default=1,
-#                         help='number of crops for each image. default is 1')
-#     parser.add_argument('--data-aug', type=str, default='v1',
-#                         help='different types of data augmentation pipelines. Supports v1, v2, v3 and v4.')
-#     # dummy benchmark
-#     parser.add_argument('--benchmark', action='store_true',
-#                         help='whether to use dummy data for benchmarking performance.')
-#     # calibration
-#     parser.add_argument('--calibration', action='store_true',
-#                         help='quantize model')
-#     parser.add_argument('--num-calib-batches', type=int, default=5,
-#                         help='number of batches for calibration')
-#     parser.add_argument('--quantized-dtype', type=str, default='auto',
-#                         choices=['auto', 'int8', 'uint8'],
-#                         help='quantization destination data type for input data')
-#     parser.add_argument('--calib-mode', type=str, default='naive',
-#                         help='calibration mode used for generating calibration table for the quantized symbol; supports'
-#                             ' 1. none: no calibration will be used. The thresholds for quantization will be calculated'
-#                             ' on the fly. This will result in inference speed slowdown and loss of accuracy'
-#                             ' in general.'
-#                             ' 2. naive: simply take min and max values of layer outputs as thresholds for'
-#                             ' quantization. In general, the inference accuracy worsens with more examples used in'
-#                             ' calibration. It is recommended to use `entropy` mode as it produces more accurate'
-#                             ' inference results.'
-#                             ' 3. entropy: calculate KL divergence of the fp32 output and quantized output for optimal'
-#                             ' thresholds. This mode is expected to produce the best inference accuracy of all three'
-#                             ' kinds of quantized models if the calibration dataset is representative enough of the'
-#                             ' inference dataset.')
-#     opt = parser.parse_args()
-#     return opt
 
 parser = argparse.ArgumentParser()
 
@@ -175,14 +41,8 @@ def batch_fn(batch, ctx):
     label = split_and_load(batch[1], ctx_list=ctx, batch_axis=0, even_split=False)
     return data, label
 
-def find_model_params():
-    try:
-        resume_params = next(path for path in os.listdir(config["model_folder"])
-                                if (config["model"] in path) and ("params" in path))
-    except:
-        logger.info("There is no trained model in current model folder")
-
-    return resume_params
+def _list_to_numpy(array):
+    return np.concatenate([batch_values[0].asnumpy() for batch_values in array])
 
 
 def test(ctx, val_data, opt, net):
@@ -194,7 +54,6 @@ def test(ctx, val_data, opt, net):
     for i, batch in enumerate(val_data):
         data, label = batch_fn(batch, ctx)
         outputs = []
-        aux_outputs = []
         for _, X in enumerate(data):
             X = X.reshape((-1,) + X.shape[2:])
             # pred = net(X.astype(opt.dtype, copy=False))
@@ -202,11 +61,10 @@ def test(ctx, val_data, opt, net):
             if opt.use_softmax:
                 pred = F.softmax(pred, axis=1)
             outputs.append(pred)
-            aux_outputs.append(pred.asnumpy())
 
-        predictions.append(aux_outputs)
-        true_labels.append(label.asnumpy())
-
+        predictions.append(outputs)
+        true_labels.append(label)
+    
         acc_top1.update(label, outputs)
         acc_top5.update(label, outputs)
         mx.ndarray.waitall()
@@ -216,17 +74,36 @@ def test(ctx, val_data, opt, net):
 
         if i > 0 and i % opt.log_interval == 0:
             print('%04d/%04d is done: acc-top1=%f acc-top5=%f' % (i, len(val_data), cur_top1*100, cur_top5*100))
-
+   
     _, top1 = acc_top1.get()
     _, top5 = acc_top5.get()
     #save true_labels, predictions
-    with open(os.path.join(opt.save_dir,"true_labels.pkl"),"wb") as f:
-        pickle.dump(true_labels,f)
-    with open(os.path.join(opt.save_dir,"predictions.pkl"),"wb") as f:
-        pickle.dump(predictions,f)
+    predictions  = _list_to_numpy(predictions)
+    true_labels  = _list_to_numpy(true_labels)
+    np.save(os.path.join(opt.save_dir,"labels"),true_labels)
+    np.save(os.path.join(opt.save_dir,"predictions"),predictions)
+  
+    return top1,top5, true_labels,predictions
 
-    return (top1, top5)
+def get_split_report(evaluator):
+    thresholds  = np.linspace(0.1,0.9,num = 10)    
+    #init metrics dict
+    metrics = evaluator.init_metrics()
+    for count,thr in enumerate(thresholds):
+        true_labels, predicted_labels  = evaluator.filter_predictions(thr)
+        evaluator.plot_confusion_matrix(true_labels,predicted_labels,title= "Confusion_Matrix",epoch=count)
+        metrics = evaluator._update_test_metrics(true_labels,predicted_labels,metrics)
+        #compute class Precision,Recall
+        evaluator.plot_class_performance(metrics["Precision_Class"][count],"Precision",count,title= "Class_Precision")
+        evaluator.plot_class_performance(metrics["Recall_Class"][count],"Recall",count,title= "Class_Recall")
+        #save only avg metrics
+        avg_metrics = {metric: value for metric,value in metrics.items() if not("Class" in metric)}
+    return avg_metrics
 
+def save_results(metrics,split_folder):
+    table_file = os.path.join(split_folder,"metrics.csv")
+    metrics_df  = pd.DataFrame.from_dict(metrics)
+    metrics_df.to_csv(table_file,index=False)
 
 def benchmarking(opt, net, ctx):
     bs = opt.batch_size
@@ -280,19 +157,14 @@ def calibration(net, val_data, opt, ctx, logger):
 def main(logger):
     opt = parse_args(parser)
     print(opt)
-
+    
+    assert not(os.path.isdir(opt.save_dir)), "already done this experiment..."
+    Path(opt.save_dir).mkdir(parents = True)
     # Garbage collection, default threshold is (700, 10, 10).
     # Set threshold lower to collect garbage more frequently and release more CPU memory for heavy data loading.
     gc.set_threshold(100, 5, 5)
 
-    # set env
-    # num_gpus = opt.num_gpus
-    # batch_size = opt.batch_size
-    # context = [mx.cpu()]
-    # if num_gpus > 0:
-    #     batch_size *= max(1, num_gpus)
-    #     context = [mx.gpu(i) for i in range(num_gpus)]
-    
+
     num_gpus = 1
     context = [mx.gpu(i) for i in range(num_gpus)]
     per_device_batch_size = 5
@@ -305,43 +177,43 @@ def main(logger):
     # get data
     default_mean = [0.485, 0.456, 0.406]
     default_std = [0.229, 0.224, 0.225]
-    if opt.ten_crop:
-        if opt.data_aug == 'v1':
-            transform_test = transforms.Compose([
-                video.VideoTenCrop(opt.input_size),
-                video.VideoToTensor(),
-                video.VideoNormalize(default_mean, default_std)
-            ])
-        else:
-            transform_test = transforms.Compose([
-                video.ShortSideRescale(opt.input_size),
-                video.VideoTenCrop(opt.input_size),
-                video.VideoToTensor(),
-                video.VideoNormalize(default_mean, default_std)
-            ])
-        opt.num_crop = 10
-    elif opt.three_crop:
-        if opt.data_aug == 'v1':
-            transform_test = transforms.Compose([
-                video.VideoThreeCrop(opt.input_size),
-                video.VideoToTensor(),
-                video.VideoNormalize(default_mean, default_std)
-            ])
-        else:
-            transform_test = transforms.Compose([
-                video.ShortSideRescale(opt.input_size),
-                video.VideoThreeCrop(opt.input_size),
-                video.VideoToTensor(),
-                video.VideoNormalize(default_mean, default_std)
-            ])
-        opt.num_crop = 3
-    else:
-        if opt.data_aug == 'v1':
-            transform_test = video.VideoGroupValTransform(size=opt.input_size, mean=default_mean, std=default_std)
-        else:
-            transform_test = video.VideoGroupValTransformV2(crop_size=(opt.input_size, opt.input_size), short_side=opt.input_size,
-                                                            mean=default_mean, std=default_std)
-        opt.num_crop = 1
+    # if opt.ten_crop:
+    #     if opt.data_aug == 'v1':
+    #         transform_test = transforms.Compose([
+    #             video.VideoTenCrop(opt.input_size),
+    #             video.VideoToTensor(),
+    #             video.VideoNormalize(default_mean, default_std)
+    #         ])
+    #     else:
+    #         transform_test = transforms.Compose([
+    #             video.ShortSideRescale(opt.input_size),
+    #             video.VideoTenCrop(opt.input_size),
+    #             video.VideoToTensor(),
+    #             video.VideoNormalize(default_mean, default_std)
+    #         ])
+    #     opt.num_crop = 10
+    # elif opt.three_crop:
+    #     if opt.data_aug == 'v1':
+    #         transform_test = transforms.Compose([
+    #             video.VideoThreeCrop(opt.input_size),
+    #             video.VideoToTensor(),
+    #             video.VideoNormalize(default_mean, default_std)
+    #         ])
+    #     else:
+    #         transform_test = transforms.Compose([
+    #             video.ShortSideRescale(opt.input_size),
+    #             video.VideoThreeCrop(opt.input_size),
+    #             video.VideoToTensor(),
+    #             video.VideoNormalize(default_mean, default_std)
+    #         ])
+    #     opt.num_crop = 3
+    # else:
+    #     if opt.data_aug == 'v1':
+    #         transform_test = video.VideoGroupValTransform(size=opt.input_size, mean=default_mean, std=default_std)
+    #     else:
+    #         transform_test = video.VideoGroupValTransformV2(crop_size=(opt.input_size, opt.input_size), short_side=opt.input_size,
+    #                                                         mean=default_mean, std=default_std)
+    #     opt.num_crop = 1
 
     if not opt.deploy:
         # get model
@@ -357,7 +229,7 @@ def main(logger):
         net = get_model(name=model_name, nclass=classes, pretrained=opt.use_pretrained, num_segments=opt.num_segments, num_crop=opt.num_crop)
         net.cast(opt.dtype)
         net.collect_params().reset_ctx(context)
-        resume_params  = find_model_params()
+        resume_params  = find_model_params(opt)
 
         if opt.mode == 'hybrid':
             net.hybridize(static_alloc=True, static_shape=True)
@@ -402,7 +274,6 @@ def main(logger):
 
     elif opt.dataset == 'custom':
         transform_test = video.VideoGroupTrainTransform(size=(224, 224), scale_ratios=[1.0, 0.8], mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-        print("loaded_data")
         
         val_dataset = VideoClsCustom(root=opt.val_data_dir,
                                setting=opt.val_list,
@@ -428,8 +299,35 @@ def main(logger):
         calibration(net, val_data, opt, context, logger)
         sys.exit()
 
+
     start_time = time.time()
-    acc_top1_val, acc_top5_val = test(context, val_data, opt, net)
+    acc_top1_val, acc_top5_val, true_labels, predicted_probabilities = test(context, val_data, opt, net)
+    split_filename  = os.path.split(opt.val_list)[1]
+    split = os.path.splitext(split_filename)[0]
+    #load encoder
+    encoder  = joblib.load(opt.encoder_path)
+    #set-up metrics
+    classes = np.arange(len(encoder.classes_))
+    metrics_dict={ "Accuracy":balanced_accuracy_score,
+                "Mcc":matthews_corrcoef,
+                "Precision_Avg": [precision_score,{"average":"micro"}],
+                "Recall_Avg" : [recall_score,{"average":"micro"}],
+                "Precision_Class": [precision_score,{"labels":classes,"average":None}],
+                "Recall_Class" : [recall_score,{"labels":classes,"average":None}],
+                }
+    split_folder = os.path.join(opt.save_dir,split) 
+    #set-up evaluator
+    evaluator = Evaluator_video(split_folder,
+                        encoder,
+                        true_labels,
+                        predicted_probabilities,
+                        metrics_dict)
+    #compute report
+    report = get_split_report(evaluator)
+    #save report
+    save_results(report,split_folder)
+    print(f"Correctly process split {split}")
+
     end_time = time.time()
 
     print('Test accuracy: acc-top1=%f acc-top5=%f' % (acc_top1_val*100, acc_top5_val*100))

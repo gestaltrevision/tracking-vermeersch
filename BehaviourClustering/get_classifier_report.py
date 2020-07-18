@@ -11,8 +11,7 @@ from sklearn.metrics import (balanced_accuracy_score, confusion_matrix,
                              f1_score, matthews_corrcoef, precision_score,
                              recall_score)
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from tqdm.notebook import tqdm
-
+from tqdm import tqdm
 import torch
 from batch_preprocessing import prepare_batch_cnn, prepare_batch_embeddings
 from BehaviourDatasets import TSDataset
@@ -22,14 +21,19 @@ from pytorchtools import load_pretrained_model
 from temperature_scaling import ModelWithTemperature
 from torch.utils.data import DataLoader, Dataset
 from TSResNet import tsresnet18, tsresnet_shallow
+import pandas as pd
 
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--config_path", type=str,
                     help="File with config settings for testing")
 
+def get_file_stem(path):
+    base=os.path.basename(path)
+    return os.path.splitext(base)[0]
+
 def get_split_report(evaluator,split):
-    thresholds  = np.linspace(0.01,1,num = 15)
+    thresholds  = np.linspace(0.1,0.9,num = 10)    
     #init metrics dict
     metrics = evaluator.init_metrics()
     for count,thr in enumerate(thresholds):
@@ -39,12 +43,14 @@ def get_split_report(evaluator,split):
         #compute class Precision,Recall
         evaluator.plot_class_performance(metrics["Precision_Class"][count],"Precision",count,title= "Class_Precision")
         evaluator.plot_class_performance(metrics["Recall_Class"][count],"Recall",count,title= "Class_Recall")
-    return metrics
+        #save only avg metrics
+        avg_metrics = {metric: value for metric,value in metrics.items() if not("Class" in metric)}
+    return avg_metrics
 
 def save_results(metrics,split_folder):
-    table_file = os.path.join(split_folder,"metrics.pkl")
-    with open(table_file,"wb") as f:
-        pickle.dump(metrics,f)
+    table_file = os.path.join(split_folder,"metrics.csv")
+    metrics_df  = pd.DataFrame.from_dict(metrics)
+    metrics_df.to_csv(table_file,index=False)
 
 
 if __name__ == "__main__":
@@ -97,14 +103,16 @@ if __name__ == "__main__":
     trunk_arch = tsresnet18
     trunk_params={"num_classes":num_classes,"n_components":n_components}
     trunk_model, trunk_output_size  = trunk_arch(**trunk_params)
-    trunk_model  = torch.nn.DataParallel(trunk_model)
+    # trunk_model  = torch.nn.DataParallel(trunk_model)
     models["trunk"] = load_pretrained_model("trunk", model_folder, trunk_model, device)
 
     # Set embedder model. This takes in the output of the trunk and outputs 64 dimensional embeddings
-    embedder_model = torch.nn.DataParallel(MLP([trunk_output_size, embedding_dim]))
+    # embedder_model = torch.nn.DataParallel(MLP([trunk_output_size, embedding_dim]))
+    embedder_model = MLP([trunk_output_size,embedding_dim])
     models["embedder"] = load_pretrained_model("embedder",model_folder, embedder_model, device) 
     #Classifier
-    classifier_model =  torch.nn.DataParallel(MLP([embedding_dim, num_classes]))
+    # classifier_model =  torch.nn.DataParallel(MLP([embedding_dim, num_classes]))
+    classifier_model =  MLP([embedding_dim,num_classes])
     models["classifier"] = load_pretrained_model("classifier",model_folder, classifier_model, device) 
 
     #Compute results
@@ -132,23 +140,26 @@ if __name__ == "__main__":
         report = get_split_report(evaluator,split)
         #save report
         save_results(report,split_folder)
+        print(f"Correctly process split {split}")
     
-    if config["Calibration"]:
+    if config["calibration"]:
         #calibrate model
         scaled_model = ModelWithTemperature(models,prepare_batch=prepare_batch_cnn)
         scaled_model.set_temperature(splits["val"]["loader"])
         for split in tqdm(splits.keys()):
             #set-up evaluator
             split_folder = os.path.join(results_folder,split,"Temperature") 
-            evaluator = Evaluator(scaled_model.model,
+            evaluator = Evaluator(scaled_model.models,
                                 prepare_batch_cnn,
                                 splits[split]["dataset"],
                                 splits[split]["loader"],
                                 split_folder,
+                                scaled_model.temperature,
                                 device,
-                                metrics_dict = metrics_dict,
-                                temperature= scaled_model.temperature)
+                                metrics_dict = metrics_dict)
+                                
             #compute report
             report = get_split_report(evaluator,split)
             #save report
             save_results(report,split_folder)
+            print(f"Correctly processed Temp split {split}")
