@@ -1,6 +1,6 @@
 model_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/Classifiers/balancedfrozen_256"
 batch_size: 64
 embedding_dim: 256
-dataset_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
-results_folder: "/gdrive/My Drive/Results/Behaviours/balancedfrozen_256"
+train_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+val_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"results_folder: "/gdrive/My Drive/Results/Behaviours/balancedfrozen_256"
 calibration: True

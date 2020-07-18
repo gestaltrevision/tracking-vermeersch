@@ -1,8 +1,8 @@
-
 model_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/Classifiers/baseline_balanced_256"
 batch_size: 64
 embedding_dim: 256
-dataset_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+train_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+val_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
 results_folder: "/gdrive/My Drive/Results/Behaviours/baseline_balanced_256"
 calibration: True
 
