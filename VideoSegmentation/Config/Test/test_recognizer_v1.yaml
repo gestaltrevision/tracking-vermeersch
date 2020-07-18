@@ -1,7 +1,7 @@
 save_dir: "/gdrive/My Drive/Results/Test"
 logging_file: "/gdrive/My Drive/Results/Test/logging.txt"
 model: 'i3d_resnet50_v1_custom'
-resume_params: "/gdrive/My Drive/Video_Classification/ID3_SGDR_lr_0_0001/0.7905-custom-i3d_resnet50_v1_custom-060-best.params"
+model_foldel: " /gdrive/My Drive/Video_Classification/ID3_SGDR_lr_0_0001"
 eval: True
 data_aug: "v1"
 resume_epoch: 0

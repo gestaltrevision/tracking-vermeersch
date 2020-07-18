@@ -22,7 +22,7 @@ mode: "imperative"
 model: ""
 input_size: 224
 crop_ratio: 0.875
-use_pretrained : True
+use_pretrained : False
 hashtag : ""
 use_se: False
 mixup: False
@@ -64,3 +64,14 @@ data_aug: "v1"
 train_only: True
 more_fix_crop: False
 max_distort: 1
+benchmark: False
+calibration: False
+num_calib_batches: 5
+quantized: False
+quantized_dtype: "auto"
+calib_mode: "naive"
+ten_crop: False
+three_crop: True
+deploy: False
+use_softmax: True
+model_folder: ""

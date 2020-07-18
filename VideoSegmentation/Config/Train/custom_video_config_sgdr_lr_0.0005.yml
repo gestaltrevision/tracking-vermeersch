@@ -1,0 +1,11 @@
+
+use_pretrained : False
+save_dir: "/gdrive/My Drive/Video_Classification/ID3_SGDR_lr_0_0005"
+logging_file: "/gdrive/My Drive/Video_Classification/ID3_SGDR_lr_0_0005/logging.txt"
+model: 'i3d_resnet50_v1_custom'
+eval: False
+data_aug: "v1"
+train_only: False
+num_epochs: 80
+resume_epoch: 0
+lr: 0.0005
