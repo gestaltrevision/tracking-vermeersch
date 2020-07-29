@@ -1,0 +1,10 @@
+use_pretrained : False
+save_dir: "/gdrive/My Drive/Video_Classification/SlowFast_test"
+logging_file: "/gdrive/My Drive/Video_Classification/SlowFast_test/logging.txt"
+model: 'slowfast_4x16_resnet50_custom'
+eval: False
+data_aug: "v1"
+train_only: False
+num_epochs: 80
+resume_epoch: 0
+lr: 0.01

@@ -1,0 +1,10 @@
+save_dir: "/gdrive/My Drive/Results/ActiveLearning/ID3_SGDR_lr_0_01_v2"
+logging_file: "/gdrive/My Drive/Results/ActiveLearning/ID3_SGDR_lr_0_01_v2/logging.txt"
+model: 'i3d_resnet50_v1_custom'
+model_folder: "/gdrive/My Drive/Video_Classification/ActiveLearning/ID3_SGDR_lr_0_01_v2"
+eval: True
+data_aug: "v1"
+resume_epoch: 0
+
+
+
