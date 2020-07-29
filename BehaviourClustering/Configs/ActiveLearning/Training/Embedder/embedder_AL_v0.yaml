@@ -1,0 +1,15 @@
+model_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/Embedder_256"
+train_base_dir:  "/gdrive/My Drive/Datasets/HAR_AL"
+train_base_root: "HAR_dataset_AL"
+val_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+data_subsets: ["v0"]
+output_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/ActiveLearning/Embedders/embedder_256_v0"
+batch_size: 64
+embedding_dim: 256
+base_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+optim_file: "/gdrive/My Drive/Hyperparameter_opt/Metric_Learning_v1/SGDR/experiment.json"
+loss_optim_file: "/gdrive/My Drive/Hyperparameter_opt/Metric_Learning_v1/Loss_opt/experiment.json"
+ActiveLearning: True
+pretrain: True
+n_epochs: 20
+patience: 20

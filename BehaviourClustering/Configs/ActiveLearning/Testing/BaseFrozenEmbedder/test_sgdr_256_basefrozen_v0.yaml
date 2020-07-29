@@ -1,0 +1,10 @@
+model_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/ActiveLearning/Classifiers/basefrozen_embedder_256_v0"
+batch_size: 64
+embedding_dim: 256
+train_folder: "/gdrive/My Drive/Datasets/HAR_AL/HAR_dataset_AL_v0"
+val_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+base_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+results_folder: "/gdrive/My Drive/Results/Behaviours/ActiveLearning/basefrozen_embedder_256_v0"
+calibration: True
+ActiveLearning: True
+

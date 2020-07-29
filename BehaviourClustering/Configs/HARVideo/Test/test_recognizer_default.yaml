@@ -1,0 +1,79 @@
+
+dataset: 'custom'
+data_dir: "/content/Train"
+val_data_dir: "/content/Val"
+train_list:  "/gdrive/My Drive/Datasets/HAR_Video/Base_Case/Train_encodded.txt"
+val_list :  "/gdrive/My Drive/Datasets/HAR_Video/Base_Case/Val_encodded.txt"
+batch_size: 8
+dtype: "float32"
+num_gpus: 1
+num_workers: 4
+num_epochs: 10
+lr: 0.0001
+momentum: 0.9
+wd: 0.0001
+lr_mode: "step"
+lr_decay: 0.1
+lr_decay_period: 0
+lr_decay_epoch: "40,60"
+warmup_lr: 0.0
+warmup_epochs: 0
+mode: "imperative"    
+model: ""
+input_size: 224
+crop_ratio: 0.875
+use_pretrained : False
+hashtag : ""
+use_se: False
+mixup: False
+mixup_alpha: 0.2
+mixup_epoch: 0
+no_wd: False
+batch_norm: True
+save_frequency: 5
+save_dir: ""
+resume_epoch: 0
+resume_params: ""
+resume_states: ""
+log_interval: 25
+logging_file: ""
+use_gn: False
+eval: False
+num_segments: 1
+use_tsn: False
+new_height: 0
+new_width : 0
+new_length: 1
+new_step: 1
+clip_grad: 0
+partial_bn: False
+freeze_bn: True
+num_classes: 22
+scale_ratios: '1.0, 0.875, 0.75, 0.66'
+use_amp: False
+prefetch_ratio: 2.0
+kvstore: None
+video_loader: False
+use_decord: True
+accumulate: 1
+slowfast: False
+slow_temporal_stride: 16
+fast_temporal_stride: 2
+num_crop: 1
+data_aug: "v1"
+train_only: True
+more_fix_crop: False
+max_distort: 1
+benchmark: False
+calibration: False
+num_calib_batches: 5
+quantized: False
+quantized_dtype: "auto"
+calib_mode: "naive"
+ten_crop: False
+three_crop: True
+deploy: False
+use_softmax: True
+model_folder: ""
+encoder_path: "/content/encoder.pkl"
+balanced: False

@@ -1,0 +1,14 @@
+model_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/Embedders/embedder_256"
+train_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+val_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+output_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/Classifiers_v2/baseline_balanced_256"
+batch_size: 64
+embedding_dim: 256
+optim_file: "/gdrive/My Drive/Hyperparameter_opt/Metric_Learning_v1/SGDR/experiment.json"
+pretrain: False
+balanced: True
+n_epochs: 150 
+patience: 10
+freeze: ()
+ActiveLearning: False
+base_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"

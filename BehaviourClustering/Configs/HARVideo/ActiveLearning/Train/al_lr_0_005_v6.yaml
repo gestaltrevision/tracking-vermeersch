@@ -1,0 +1,15 @@
+use_pretrained : False
+save_dir: "/gdrive/My Drive/HAR_Video_Classification/ActiveLearning/ID3_SGDR_lr_0_005_v6"
+logging_file: "/gdrive/My Drive/HAR_Video_Classification/ActiveLearning/ID3_SGDR_lr_0_005_v6/logging.txt"
+data_dir: "/content/HAR_Dataset_AL_v6/Train"
+train_list:  "/gdrive/My Drive/Datasets/HAR_Video/HAR_AL_subsets/HAR_Dataset_AL_v6/Train_encodded.txt"
+model_folder: "/gdrive/My Drive/HAR_Video_Classification/ActiveLearning/ID3_SGDR_lr_0_005_v5"
+model: 'i3d_resnet50_v1_custom'
+eval: False
+data_aug: "v1"
+train_only: False
+num_epochs: 20
+T_0: 1
+T_mult: 2
+resume_epoch: 0
+lr: 0.005

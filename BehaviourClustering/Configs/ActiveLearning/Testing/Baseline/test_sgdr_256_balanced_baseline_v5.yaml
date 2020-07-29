@@ -1,0 +1,9 @@
+model_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/ActiveLearning/Classifiers/baseline_balanced_256_v5"
+batch_size: 64
+embedding_dim: 256
+train_folder: "/gdrive/My Drive/Datasets/HAR_AL/HAR_dataset_AL_v5"
+val_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+base_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+results_folder: "/gdrive/My Drive/Results/Behaviours/ActiveLearning/baseline_balanced_256_v5"
+calibration: True
+ActiveLearning: False 
