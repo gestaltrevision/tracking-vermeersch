@@ -79,8 +79,7 @@ if __name__ == "__main__":
     # Load Pretrained model
     models={}
     # Set trunk model  
-    # num_classes=train_dataset.num_classes
-    num_classes = train_dataset.num_classes
+    num_classes=train_dataset.num_classes
     trunk_arch = tsresnet18
     trunk_params={"num_classes":num_classes,"n_components":n_components}
     trunk_model, trunk_output_size  = trunk_arch(**trunk_params)
@@ -94,7 +93,12 @@ if __name__ == "__main__":
     if(config["pretrain"]==True):
        trunk = load_pretrained_model("trunk", model_folder, trunk_model, device)
        embedder = load_pretrained_model("embedder", model_folder, embedder_model, device)
-       classifier = load_pretrained_model("classifier", model_folder, classifier_model, device)
+       try:
+        classifier = load_pretrained_model("classifier", model_folder, classifier_model, device)
+       except:
+        classifier = torch.nn.DataParallel(classifier_model)
+
+
     else:
         trunk = torch.nn.DataParallel(trunk_model)
         embedder = torch.nn.DataParallel(embedder_model)

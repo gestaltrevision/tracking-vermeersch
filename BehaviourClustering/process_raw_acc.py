@@ -9,7 +9,8 @@ project_path=os.path.dirname(os.getcwd())
 sys.path.append(os.path.join(project_path,"Code"))
 
 from acc_ut import (filter_nulls, get_pictures_dataset,
-                    process_readings_participant, segment_signal)
+                    process_readings_participant, segment_signal,
+                    get_har_video_dataset)
 
 
 
@@ -31,6 +32,11 @@ parser.add_argument("-ns","--n_samples", nargs='?', const=100, type=int, default
 parser.add_argument("-np","--n_points", nargs='?', const=50, type=int, default=50, 
                     help=" Data points in each sliding window after downsampling")
 
+def read_metadata(df_path):
+  #read df
+  df = pd.read_csv(df_path,sep=" ",header= None)
+  df.columns = ["video_path","label","frames"]
+  return df
 
 
 if __name__ == "__main__":
@@ -43,31 +49,39 @@ if __name__ == "__main__":
     participant_folders=[os.path.join(participant_path,folder) for folder in os.listdir(participant_path)]
     new_samples_number=args.n_points
     samples_per_sl=args.n_samples
-    # data=[]
-    # targets=[]
+    data=[]
+    targets=[]
 
     #open raw tables to get raw acc values and participant info
     for participant_folder in tqdm(participant_folders):
-        participant=os.path.basename(participant_folder)
-        folder=os.path.join(participant_folder,args.data_type)
-        file=os.path.join(folder,"{0}_raw_{1}.csv".format(args.data_type,participant))
         
-        #convert raw acc data into standard form
-        raw_df=pd.read_csv(file,decimal=',')
-        df=process_readings_participant(raw_df,participant,args.n_samples)
-        pictures_df = get_pictures_dataset(df,participant,500)
-        pictures_df = filter_nulls(pictures_df)
-        sensor_comp,labels=segment_signal(df,new_samples_number,samples_per_sl)
-   
-        np.save(os.path.join(os.path.dirname(file),'segments_data'), sensor_comp)
-        np.save(os.path.join(os.path.dirname(file),'targets_data'), labels)
+        participant=os.path.basename(participant_folder)
+        if(participant in participant_testing):
+            folder=os.path.join(participant_folder,args.data_type)
+            file=os.path.join(folder,"{0}_raw_{1}.csv".format(args.data_type,participant))
+            
+            #convert raw acc data into standard form
+            raw_df=pd.read_csv(file,decimal=',')
+            df=process_readings_participant(raw_df,participant,args.n_samples)
+            pictures_df = get_pictures_dataset(df,participant,500)
+            # pictures_df = filter_nulls(pictures_df)
+            # HAR_video_df = get_har_video_dataset(df,participant,100)
 
-        #save processed df of each participant into its correspondent folder
-        dir_path=os.path.join(os.path.dirname(file),"{0}_{1}.pkl".format(args.base_name,participant))
-        df.to_pickle(dir_path)
-        video_table_file  = os.path.join(folder,f"video_df_{participant}.csv")
-        pictures_df.to_csv(video_table_file)
+            # sensor_comp,labels=segment_signal(df,new_samples_number,samples_per_sl)
+    
+            # np.save(os.path.join(folder,'segments_data'), sensor_comp)
+            # np.save(os.path.join(folder,'targets_data'), labels)
 
-        print("Succesfully raw data  of participant : {} processed".format(participant))
+            #save processed df of each participant into its correspondent folder
+            dir_path=os.path.join(folder,"{0}_{1}.pkl".format(args.base_name,participant))
+            df.to_pickle(dir_path)
+            video_table_file  = os.path.join(folder,f"video_df_{participant}.csv")
+            pictures_df.to_csv(video_table_file)
+
+            #save processed df of each participant into its correspondent folder
+            # video_table_file_har  = os.path.join(folder,f"video_df_{participant}_HAR.csv")
+            # HAR_video_df.to_csv(video_table_file_har)
+
+            print("Succesfully raw data  of participant : {} processed".format(participant))
 
    

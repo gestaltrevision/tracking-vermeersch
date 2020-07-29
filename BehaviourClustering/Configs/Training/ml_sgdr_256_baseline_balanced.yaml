@@ -1,4 +1,4 @@
-model_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/Embedder_256"
+model_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/Embedders/embedder_256"
 train_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
 val_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
 output_folder: "/gdrive/My Drive/Models/TsResnet18_SGDR/Classifiers/baseline_balanced_256"

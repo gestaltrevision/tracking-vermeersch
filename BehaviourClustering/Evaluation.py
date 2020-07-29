@@ -73,9 +73,9 @@ class Evaluator(Trainer):
         base_dir  = os.path.join(self.results_folder,title)
         if not(os.path.isdir(base_dir)):
           os.makedirs(base_dir)
-
-        fig_file= ".".join([title,ext])
+        fig_file= f"{title}_v{epoch}.{ext}"
         fig_dir = os.path.join(base_dir,fig_file)
+        fig.savefig(fig_dir)
         self.to_tensorboard(base_dir,title,fig,epoch)
 
     def _normalize_probabilities(self,preds):
@@ -279,7 +279,7 @@ class Evaluator(Trainer):
       ax.set_yticklabels(y_labels, ha="center")
       ax.set_title(title)
 
-      # fig.set_tight_layout(True)
+      fig.set_tight_layout(True)
       if save:
             self.save_fig(title,ext,fig,epoch)
 

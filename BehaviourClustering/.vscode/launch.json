@@ -43,6 +43,21 @@
             ]
         },
         {
+            "name": " Get HAR clips script",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceRoot}/get_video_clips_har.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--root_path_data","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\AnnotatedData\\FinalDatasets\\Participants",
+                "--video_folder_root", "HARClips",
+                "--root_path_video","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\ProjectData\\Media",
+                "--metadata_path","C:\\Users\\jeuux\\Desktop\\Carrera\\MoAI\\TFM\\AnnotatedData\\FinalDatasets\\Datasets\\Video_Dataset_meta\\recordings_meta.json"
+
+
+            ]
+        },
+        {
             "name": " Datasets Debugging",
             "type": "python",
             "request": "launch",

@@ -23,14 +23,15 @@ parser.add_argument("--video_folder_root", type=str,
 def create_video_dataset():
     video_dataset = {
             "video_path": [],
-            "frames": [],
-            "label": []
+            "label": [],
+            "frames": []
             }
     return video_dataset
 
 def get_file_stem(path):
     base=os.path.basename(path)
     return os.path.splitext(base)[0]
+
 def read_metadata(df_path):
   #read df
   df = pd.read_csv(df_path,sep=" ",header= None)
@@ -48,12 +49,24 @@ if __name__ == "__main__":
     #read metadata
     with open(metadata_path,"r") as f:
         metadata = json.load(f)
+    
+    test_txt = r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\FinalDatasets\Datasets\Frames_Dataset_v1\Test.txt"
+    val_txt = r"C:\Users\jeuux\Desktop\Carrera\MoAI\TFM\AnnotatedData\FinalDatasets\Datasets\Frames_Dataset_v1\Val.txt"
+    text_df = read_metadata(test_txt)
+    val_df = read_metadata(val_txt)
+    text_df["participant"]  = text_df["video_path"].apply(lambda participant: participant.split("_")[0])
+    val_df["participant"]  = val_df["video_path"].apply(lambda participant: participant.split("_")[0])
+
+    participant_train = list(set(text_df.participant.values))
+    participant_val = list(set(val_df.participant.values))
+    participant_testing = participant_train + participant_val
 
     for idx in metadata.keys():
+
         meta  = list(metadata[idx].values())
         participant, filename = meta
-        # if not(participant in processed_participants):
-        if (participant == "020419h"):
+        
+        if (participant in participant_testing):
             #set-up
             video_folder = os.path.join(root_path_data,participant,args.video_folder_root)
             path_video = os.path.join(root_path_video,filename)
@@ -82,10 +95,13 @@ if __name__ == "__main__":
                     #update dataset
                     video_dataset["video_path"].append(str(video_rel_path))
                     video_dataset["label"].append(label)
-                    video_dataset["frames"].append(n_frames )
+                    video_dataset["frames"].append(n_frames)
 
                 #save dataset
-                video_dataset_file = os.path.join(dataset_path,f"video_dataset_{participant}.txt")
+                video_dataset_file = os.path.join(dataset_path,f"{args.video_folder_root}_dataset_{participant}.txt")
+                #old version
+                os.remove(video_dataset_file)
+
                 with open(video_dataset_file,"w") as f:
                     json.dump(video_dataset,f)
 

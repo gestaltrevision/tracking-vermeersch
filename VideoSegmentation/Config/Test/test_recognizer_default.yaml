@@ -1,9 +1,8 @@
-
 dataset: 'custom'
 data_dir: "/content/Train"
-val_data_dir: "/content/Val"
+val_data_dir: "/content/Test"
 train_list:  "/gdrive/My Drive/Datasets/Frames_Dataset_v1/Train.txt"
-val_list :  "/gdrive/My Drive/Datasets/Frames_Dataset_v1/Val.txt"
+val_list :  "/gdrive/My Drive/Datasets/Frames_Dataset_v1/Test.txt"
 batch_size: 8
 dtype: "float32"
 num_gpus: 1

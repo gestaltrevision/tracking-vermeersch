@@ -7,6 +7,7 @@ gcv.utils.check_version('0.6.0')
 from mxnet import gluon, nd, init, context
 from mxnet import autograd as ag
 from mxnet.gluon import nn
+from mxnet.gluon import loss
 from mxnet.gluon.data.vision import transforms
 from mxboard import SummaryWriter
 from mxnet.contrib import amp
@@ -23,7 +24,8 @@ import yaml
 from tqdm import tqdm
 from pathlib import Path
 from parser_helper import parse_args, find_model_params
-
+import numpy as np
+import pandas as pd
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--default_path", type=str,
@@ -32,8 +34,28 @@ parser.add_argument("--default_path", type=str,
 parser.add_argument("--custom_path", type=str,
                     help="File with current custom config settings for testing")
 
+def get_file_stem(path):
+    base=os.path.basename(path)
+    return os.path.splitext(base)[0]
 
-    
+def read_metadata(df_path):  
+    #read df
+    df = pd.read_csv(df_path,sep=" ",header= None)
+    df.columns = ["video_path","frames","label"]
+    return df
+
+def df_to_txt(df,dir_path):
+    df.to_csv(dir_path, header=None, index=None, sep=' ', mode='a')
+
+def get_weights(opt):
+    df = read_metadata(opt.train_list)
+    freq = df.label.value_counts(normalize=True)
+    weights  = np.empty(len(freq))
+    for idx,class_freq in zip(freq.index,freq.values):
+        weights[idx]  = 1/class_freq
+    return weights
+
+
 def get_data_loader(opt, batch_size, num_workers, logger, kvstore="None"):
     data_dir = opt.data_dir
     val_data_dir = opt.val_data_dir
@@ -124,16 +146,22 @@ def get_data_loader(opt, batch_size, num_workers, logger, kvstore="None"):
                                transform=transform_train,
                                video_loader=False,
                                slowfast = True,
-                               use_decord=True,)
+                               use_decord=True,
+                               slow_temporal_stride = 16,
+                               fast_temporal_stride = 4)
+
         val_dataset = VideoClsCustom(root=val_data_dir,
                                setting=opt.val_list,
-                               train=True,
+                               train=False,
                                new_length=32,
                                 name_pattern='frame_%d.jpg',
                                transform=transform_test,
                                video_loader=False,
                                slowfast = True,
-                               use_decord=True,)
+                               use_decord=True,
+                               slow_temporal_stride = 16,
+                               fast_temporal_stride = 4)
+                               
 
         # train_dataset = VideoClsCustom(setting=opt.train_list, root=data_dir, train=True,name_pattern ='frame_%d.jpg',
         #                                 video_loader=opt.video_loader, use_decord=opt.use_decord,
@@ -244,7 +272,12 @@ def main():
     def test(ctx, val_data, kvstore="None"):
         acc_top1.reset()
         acc_top5.reset()
+        #get weights 
+        weights = get_weights(opt).reshape(1,opt.num_classes)
+        weights = mx.nd.array(weights,ctx = mx.gpu(0))        
+
         L = gluon.loss.SoftmaxCrossEntropyLoss()
+        
         num_test_iter = len(val_data)
         val_loss_epoch = 0
         for i, batch in enumerate(val_data):
@@ -255,7 +288,12 @@ def main():
                 pred = net(X.astype(opt.dtype, copy=False))
                 outputs.append(pred)
 
-            loss = [L(yhat, y.astype(opt.dtype, copy=False)) for yhat, y in zip(outputs, label)]
+            if(opt.balanced):
+                loss = [L(yhat, y.astype(opt.dtype, copy=False),weights) for yhat, y in zip(outputs, label)]
+            else:
+                loss = [L(yhat, y.astype(opt.dtype, copy=False)) for yhat, y in zip(outputs, label)]
+
+            # loss = [L(yhat, y.astype(opt.dtype, copy=False)) for yhat, y in zip(outputs, label)]
 
             acc_top1.update(label, outputs)
             acc_top5.update(label, outputs)
@@ -321,6 +359,10 @@ def main():
 
         best_val_score = 0
         lr_decay_count = 0
+        #compute weights
+        weights = get_weights(opt).reshape(1,opt.num_classes)
+        weights = mx.nd.array(weights,ctx = mx.gpu(0))        
+
 
         for epoch in range(opt.resume_epoch, opt.num_epochs):
             tic = time.time()
@@ -340,7 +382,12 @@ def main():
                         # pred = net(X.astype(opt.dtype, copy=False))
                         pred  = net(X)
                         outputs.append(pred)
-                    loss = [L(yhat, y.astype(opt.dtype, copy=False)) for yhat, y in zip(outputs, label)]
+                    if(opt.balanced):
+                        loss = [L(yhat, y.astype(opt.dtype, copy=False), weights) for yhat, y in zip(outputs, label)]
+                       
+                    else:
+                        loss = [L(yhat, y.astype(opt.dtype, copy=False)) for yhat, y in zip(outputs, label)]
+
 
                     if opt.use_amp:
                         with amp.scale_loss(loss, trainer) as scaled_loss:
@@ -389,14 +436,33 @@ def main():
                     best_val_score = acc_top1_val
                     net.save_parameters('%s/%.4f-%s-%s-%03d-best.params'%(opt.save_dir, best_val_score, opt.dataset, model_name, epoch))
                     trainer.save_states('%s/%.4f-%s-%s-%03d-best.states'%(opt.save_dir, best_val_score, opt.dataset, model_name, epoch))
-                else:
-                    if opt.save_frequency and opt.save_dir and (epoch + 1) % opt.save_frequency == 0:
-                        net.save_parameters('%s/%s-%s-%03d.params'%(opt.save_dir, opt.dataset, model_name, epoch))
-                        trainer.save_states('%s/%s-%s-%03d.states'%(opt.save_dir, opt.dataset, model_name, epoch))
+                # else:
+                #     if opt.save_frequency and opt.save_dir and (epoch + 1) % opt.save_frequency == 0:
+                #         net.save_parameters('%s/%s-%s-%03d.params'%(opt.save_dir, opt.dataset, model_name, epoch))
+                #         trainer.save_states('%s/%s-%s-%03d.states'%(opt.save_dir, opt.dataset, model_name, epoch))
 
-        # save the last model
-        net.save_parameters('%s/%s-%s-%03d.params'%(opt.save_dir, opt.dataset, model_name, opt.num_epochs-1))
-        trainer.save_states('%s/%s-%s-%03d.states'%(opt.save_dir, opt.dataset, model_name, opt.num_epochs-1))
+        # # save the last model
+        # net.save_parameters('%s/%s-%s-%03d.params'%(opt.save_dir, opt.dataset, model_name, opt.num_epochs-1))
+        # trainer.save_states('%s/%s-%s-%03d.states'%(opt.save_dir, opt.dataset, model_name, opt.num_epochs-1))
+        def return_float(el):
+            return float(el)
+        try:
+            #remove "trash" files
+            performances = [get_file_stem(file).split("-")[0] for file in os.listdir(opt.save_dir) if "params" in file]
+
+            best_performance = sorted(performances,key=return_float,reverse= True)[0]
+
+            params_trash  = [os.path.join(opt.save_dir,file) for file in os.listdir(opt.save_dir) 
+                                                            if (("params" in file) and not(best_performance in file)) ]
+            states_trash  = [os.path.join(opt.save_dir,file) for file in os.listdir(opt.save_dir) 
+                                                            if (("states" in file) and not(best_performance in file)) ]
+            trash_files = params_trash + states_trash
+
+            for file in trash_files:
+                os.remove(file)
+        except: 
+            print("Sth went wrong...")
+            
 
     if opt.mode == 'hybrid':
         net.hybridize(static_alloc=True, static_shape=True)

@@ -116,6 +116,18 @@ def segment_signal(data,new_samples_number,window_size):
         
     return segments, labels
 
+def get_har_video_dataset(data,user,window_size,factor =1):
+    df_pictures = {"id":[],"target":[],"start":[],"end":[]}
+
+    for idx,(start, end) in enumerate(windows(data.index, window_size,factor)):
+        subset=data[start:end]
+        if(subset["picture"].mode()[0]!="Null"):
+            df_pictures["id"].append(f"{user}_{idx}")
+            df_pictures["target"].append(data.loc[start:end,"target"].mode()[0])
+            df_pictures["start"].append(to_seconds(data.loc[start,"Recording timestamp"]))
+            df_pictures["end"].append(to_seconds(data.loc[end,"Recording timestamp"]))
+    return pd.DataFrame.from_dict(df_pictures).set_index("id")
+
 class state_gen:
     """"""
     def __init__(self,pattern_start,pattern_stop,split = False,null_state="Null"):

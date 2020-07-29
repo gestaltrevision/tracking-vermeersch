@@ -62,7 +62,8 @@ if __name__ == "__main__":
         config = yaml.safe_load(f)
 
     model_folder = config["model_folder"]
-    dataset_folder = config["dataset_folder"]
+    dataset_folder_train = config["train_folder"]
+    dataset_folder_val = config["val_folder"]
     results_folder  = config["results_folder"]
     batch_size = config["batch_size"]
     # trunk_arch  = config["trunk_arch"]
@@ -81,9 +82,16 @@ if __name__ == "__main__":
     prepare_batch_fcn=prepare_batch_cnn
 
     #creating train and valid datasets
-    train_dataset= TSDataset(dataset_folder,scaler,"Train",level,data_types)
-    validation_dataset= TSDataset(dataset_folder,scaler,"Val",level,data_types)
-    test_dataset= TSDataset(dataset_folder,scaler,"Test",level,data_types)
+    train_dataset= TSDataset(dataset_folder_train,scaler,"Train",level,data_types,
+                            config["ActiveLearning"],config["base_folder"])
+
+    validation_dataset= TSDataset(dataset_folder_val,scaler,"Val",level,data_types,
+                                    config["ActiveLearning"],config["base_folder"])
+
+    test_dataset = TSDataset(dataset_folder_val,scaler,"Test",level,data_types,
+                                    config["ActiveLearning"],config["base_folder"])
+
+
     train_loader = DataLoader(train_dataset, batch_size=batch_size,shuffle=True)
     val_loader= DataLoader(validation_dataset, batch_size=batch_size,shuffle=True)
     test_loader= DataLoader(test_dataset, batch_size=batch_size,shuffle=True)
@@ -99,7 +107,8 @@ if __name__ == "__main__":
     models={}
     # Set trunk model 
     # trunk_arch=tsresnet18
-    num_classes=train_dataset.num_classes
+    # num_classes=train_dataset.num_classes
+    num_classes =22
     trunk_arch = tsresnet18
     trunk_params={"num_classes":num_classes,"n_components":n_components}
     trunk_model, trunk_output_size  = trunk_arch(**trunk_params)
@@ -142,24 +151,24 @@ if __name__ == "__main__":
         save_results(report,split_folder)
         print(f"Correctly process split {split}")
     
-    if config["calibration"]:
-        #calibrate model
-        scaled_model = ModelWithTemperature(models,prepare_batch=prepare_batch_cnn)
-        scaled_model.set_temperature(splits["val"]["loader"])
-        for split in tqdm(splits.keys()):
-            #set-up evaluator
-            split_folder = os.path.join(results_folder,split,"Temperature") 
-            evaluator = Evaluator(scaled_model.models,
-                                prepare_batch_cnn,
-                                splits[split]["dataset"],
-                                splits[split]["loader"],
-                                split_folder,
-                                scaled_model.temperature,
-                                device,
-                                metrics_dict = metrics_dict)
+    # if config["calibration"]:
+    #     #calibrate model
+    #     scaled_model = ModelWithTemperature(models,prepare_batch=prepare_batch_cnn)
+    #     scaled_model.set_temperature(splits["val"]["loader"])
+    #     for split in tqdm(splits.keys()):
+    #         #set-up evaluator
+    #         split_folder = os.path.join(results_folder,split,"Temperature") 
+    #         evaluator = Evaluator(scaled_model.models,
+    #                             prepare_batch_cnn,
+    #                             splits[split]["dataset"],
+    #                             splits[split]["loader"],
+    #                             split_folder,
+    #                             scaled_model.temperature,
+    #                             device,
+    #                             metrics_dict = metrics_dict)
                                 
-            #compute report
-            report = get_split_report(evaluator,split)
-            #save report
-            save_results(report,split_folder)
-            print(f"Correctly processed Temp split {split}")
+    #         #compute report
+    #         report = get_split_report(evaluator,split)
+    #         #save report
+    #         save_results(report,split_folder)
+    #         print(f"Correctly processed Temp split {split}")

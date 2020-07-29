@@ -6,4 +6,6 @@ train_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
 val_folder: "/gdrive/My Drive/Datasets/HAR_dataset_v1"
 results_folder: "/gdrive/My Drive/Results/Behaviours/baseline_base_256"
 calibration: True
+base_folder:  "/gdrive/My Drive/Datasets/HAR_dataset_v1"
+ActiveLearning: False 
 

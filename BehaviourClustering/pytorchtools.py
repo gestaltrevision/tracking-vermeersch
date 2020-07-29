@@ -36,6 +36,7 @@ def load_pretrained_model(model_name, model_dir, model, device):
     checkpoint_file = next(file for file in os.listdir(model_dir) if (f"{model_name}_best" in file))
   except:
     checkpoint_file = next(file for file in os.listdir(model_dir) if (f"{model_name}" in file))
+    
   checkpoint_path=os.path.join(model_dir,checkpoint_file)
   try:
     model.load_state_dict(torch.load(checkpoint_path))
