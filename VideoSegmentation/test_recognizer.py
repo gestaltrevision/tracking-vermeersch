@@ -85,8 +85,8 @@ def test(ctx, val_data, opt, net):
   
     return top1,top5, true_labels,predictions
 
-def get_split_report(evaluator):
-    thresholds  = np.linspace(0.1,0.9,num = 10)    
+def get_split_report(evaluator,split):
+    thresholds  = np.linspace(0,1,num = 15)    
     #init metrics dict
     metrics = evaluator.init_metrics()
     for count,thr in enumerate(thresholds):
@@ -96,8 +96,21 @@ def get_split_report(evaluator):
         #compute class Precision,Recall
         evaluator.plot_class_performance(metrics["Precision_Class"][count],"Precision",count,title= "Class_Precision")
         evaluator.plot_class_performance(metrics["Recall_Class"][count],"Recall",count,title= "Class_Recall")
-        #save only avg metrics
-        avg_metrics = {metric: value for metric,value in metrics.items() if not("Class" in metric)}
+    
+    #plot metrics evolution
+    metrics["threshold"] = thresholds
+    #mcc
+    evaluator.plot_metric("Mcc","threshold",metrics,"MCC curve")
+    metrics["Mcc_auc"] = auc(metrics["threshold"],metrics["Mcc"])
+    #coverages
+    evaluator.plot_metric("coverages","threshold",metrics,"Coverage curve")
+    metrics["coverages_auc"] = auc(metrics["threshold"],metrics["coverages"])
+    #Pr curves
+    evaluator.plot_metric("Recall_Avg","Precision_Avg",metrics,"Pr curve")
+    metrics["pr_auc"] = auc(metrics["Recall_Avg"],metrics["Precision_Avg"])
+
+    #save only avg metrics
+    avg_metrics = {metric: value for metric,value in metrics.items() if not("Class" in metric)}
     return avg_metrics
 
 def save_results(metrics,split_folder):

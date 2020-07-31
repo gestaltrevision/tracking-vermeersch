@@ -242,6 +242,22 @@ class Evaluator(Trainer):
         if save:
             self.save_fig(title,ext,fig,epoch)
 
+    def plot_metric(self,
+                    xaxis,yaxis,
+                    metrics,
+                    title="", ext = "png", 
+                    save = True):
+   
+        fig = plt.figure(figsize=(15,10),dpi = 125)
+        ax = fig.add_subplot(1, 1, 1)
+
+        ax.plot(metrics[xaxis],metrics[yaxis])
+        ax.set_xlabel(xaxis)
+        ax.set_ylabel(yaxis)
+        ax.set_title(title)
+        if save:
+            self.save_fig(title,ext,fig,0)
+            
 
     def plot_class_performance(self,
                                scores,

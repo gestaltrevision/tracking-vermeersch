@@ -51,12 +51,15 @@ if __name__ == "__main__":
     samples_per_sl=args.n_samples
     data=[]
     targets=[]
-
+    video_folder_root = "HARClips"
+    processed_participants = [participant for participant in os.listdir(participant_path) 
+                                if os.path.isdir(os.path.join(participant_path,participant,video_folder_root))]
     #open raw tables to get raw acc values and participant info
+    tables_list = []
     for participant_folder in tqdm(participant_folders):
         
         participant=os.path.basename(participant_folder)
-        if(participant in participant_testing):
+        if not(participant in processed_participants):
             folder=os.path.join(participant_folder,args.data_type)
             file=os.path.join(folder,"{0}_raw_{1}.csv".format(args.data_type,participant))
             
@@ -64,13 +67,15 @@ if __name__ == "__main__":
             raw_df=pd.read_csv(file,decimal=',')
             df=process_readings_participant(raw_df,participant,args.n_samples)
             pictures_df = get_pictures_dataset(df,participant,500)
+           
             # pictures_df = filter_nulls(pictures_df)
-            # HAR_video_df = get_har_video_dataset(df,participant,100)
+            HAR_video_df = get_har_video_dataset(df,participant,100)
+            tables_list.append(HAR_video_df)
 
-            # sensor_comp,labels=segment_signal(df,new_samples_number,samples_per_sl)
+            sensor_comp,labels=segment_signal(df,new_samples_number,samples_per_sl)
     
-            # np.save(os.path.join(folder,'segments_data'), sensor_comp)
-            # np.save(os.path.join(folder,'targets_data'), labels)
+            np.save(os.path.join(folder,'segments_data'), sensor_comp)
+            np.save(os.path.join(folder,'targets_data'), labels)
 
             #save processed df of each participant into its correspondent folder
             dir_path=os.path.join(folder,"{0}_{1}.pkl".format(args.base_name,participant))
@@ -78,10 +83,8 @@ if __name__ == "__main__":
             video_table_file  = os.path.join(folder,f"video_df_{participant}.csv")
             pictures_df.to_csv(video_table_file)
 
-            #save processed df of each participant into its correspondent folder
-            # video_table_file_har  = os.path.join(folder,f"video_df_{participant}_HAR.csv")
-            # HAR_video_df.to_csv(video_table_file_har)
+            save processed df of each participant into its correspondent folder
+            video_table_file_har  = os.path.join(folder,f"video_df_{participant}_HAR.csv")
+            HAR_video_df.to_csv(video_table_file_har)
 
             print("Succesfully raw data  of participant : {} processed".format(participant))
-
-   
